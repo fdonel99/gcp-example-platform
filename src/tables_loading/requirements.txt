@@ -1,0 +1,6 @@
+functions-framework==3.*
+pysqlite3-binary==0.5.2
+google-cloud-bigquery>=3.0.0
+polars>=0.20.0
+pyarrow>=14.0.0
+connectorx>=0.3.2

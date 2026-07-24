@@ -1,0 +1,6 @@
+functions-framework
+pandas
+numpy
+gcsfs
+openpyxl
+google-cloud-storage
