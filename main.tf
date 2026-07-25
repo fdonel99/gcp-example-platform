@@ -621,7 +621,7 @@ resource "google_cloud_scheduler_job" "schedulazione_drive_to_gcp" {
 # TABLES LOADING
 
 resource "google_cloud_scheduler_job" "schedulazione_tables_loading" {
-  name             = "drive-to-bq-scheduler"
+  name             = "tables-loading-scheduler"
   description      = "Schedulazione per creare le tabelle in BigQuery ogni domenica"
   schedule         = "55 16 * * 0"
   time_zone        = "Europe/Rome"
