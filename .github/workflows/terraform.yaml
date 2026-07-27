@@ -1,0 +1,39 @@
+name: "Terraform CI/CD"
+
+# Definisce quando la pipeline deve partire (ad ogni push sulla branch 'main')
+on:
+  push:
+    branches:
+      - main # NOTA: se la tua branch si chiama 'master', cambialo qui!
+
+jobs:
+  terraform:
+    name: "Terraform Deploy"
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Scarica il tuo codice nella macchina virtuale di GitHub
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      # 2. Usa il segreto per autenticarsi su Google Cloud
+      - name: Autenticazione GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      # 3. Installa Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # 4. Inizializza il backend (il bucket che contiene lo stato)
+      - name: Terraform Init
+        run: terraform init
+
+      # 5. Mostra cosa sta per cambiare
+      - name: Terraform Plan
+        run: terraform plan
+
+      # 6. Applica le modifiche automaticamente
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
