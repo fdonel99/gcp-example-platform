@@ -58,7 +58,7 @@ def estrai_colore_sfondo(img_cv, vertici):
         return (232, 106, 33) 
 
 def estrai_colore_testo(img_cv, vertici):
-    """Estrae il colore medio dei pixel che compongono il testo usando una maschera di contrasto."""
+    """Usa K-Means (Machine Learning) per separare accuratamente il colore del testo dallo sfondo a colori."""
     try:
         xs = [v['x'] for v in vertici]
         ys = [v['y'] for v in vertici]
@@ -68,19 +68,21 @@ def estrai_colore_testo(img_cv, vertici):
         crop = img_cv[min_y:max_y, min_x:max_x]
         if crop.size == 0: return (255, 255, 255)
             
-        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        # Rimodella l'immagine in una lista di pixel RGB
+        pixels = crop.reshape((-1, 3)).astype(np.float32)
         
-        white_pixels = cv2.countNonZero(thresh)
-        black_pixels = thresh.size - white_pixels
+        # Cerca i 2 colori dominanti (Sfondo e Testo)
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+        _, labels, centers = cv2.kmeans(pixels, 2, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
         
-        if white_pixels < black_pixels:
-            text_mask = thresh
-        else:
-            text_mask = cv2.bitwise_not(thresh)
-            
-        mean_color = cv2.mean(crop, mask=text_mask)
-        return (int(mean_color[2]), int(mean_color[1]), int(mean_color[0]))
+        centers = np.uint8(centers)
+        counts = np.bincount(labels.flatten())
+        
+        # Il testo è quasi sempre il gruppo con meno pixel nel riquadro
+        text_cluster_idx = np.argmin(counts)
+        color = centers[text_cluster_idx]
+        
+        return (int(color[2]), int(color[1]), int(color[0]))
     except Exception as e:
         print(f"Errore estrazione colore testo: {e}")
         return (255, 255, 255)
@@ -140,26 +142,18 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     font_path_regular = "montserrat.ttf"
     font_path_bold = "montserrat-bold.ttf"
 
-    # ==========================================
-    # FASE 1: DISEGNO DI TUTTE LE TOPPE DI SFONDO
-    # ==========================================
+    # FASE 1: Toppe di sfondo (Invariata)
     for blocco in mappatura_testi:
         testo = blocco[f"testo_tradotto_{lingua}"]
         if not testo: continue
-            
         vertici = blocco["vertici_blocco"]
-        xs = [v['x'] for v in vertici]
-        ys = [v['y'] for v in vertici]
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
-        
+        xs, ys = [v['x'] for v in vertici], [v['y'] for v in vertici]
+        min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
         colore_sfondo = tuple(blocco.get("colore_sfondo", (232, 106, 33)))
         pad = 6
         draw.rectangle([min_x - pad, min_y - pad, max_x + pad, max_y + pad], fill=colore_sfondo)
 
-    # ==========================================
-    # FASE 2: SCRITTURA DEI TESTI TRADOTTI
-    # ==========================================
+    # FASE 2: Scrittura Testi
     for blocco in mappatura_testi:
         testo = blocco[f"testo_tradotto_{lingua}"]
         if not testo: continue
@@ -168,55 +162,61 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
             testo = testo.upper()
             
         vertici = blocco["vertici_blocco"]
-        xs = [v['x'] for v in vertici]
-        ys = [v['y'] for v in vertici]
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
+        xs, ys = [v['x'] for v in vertici], [v['y'] for v in vertici]
+        min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
         
         box_width = max_x - min_x
         box_height = max_y - min_y
         
+        # ESPANSIONE DINAMICA: Permettiamo al testo di sbordare un po' se le parole sono lunghe
+        # I titoli (banner) possono espandersi molto di più in larghezza
+        tolleranza_w = 1.6 if blocco.get("tipo") == "banner" else 1.2
+        tolleranza_h = 1.5
+        max_allowed_width = box_width * tolleranza_w
+        max_allowed_height = box_height * tolleranza_h
+        
         colore_testo = tuple(blocco.get("colore_testo", (255, 255, 255)))
-        is_bold = blocco.get("grassetto", False)
+        
+        # FORZATURA GRASSETTO: Se il testo era in maiuscolo, lo forziamo in grassetto
+        # altrimenti risulterebbe illeggibile sui badge piccoli.
+        is_bold = blocco.get("grassetto", False) or blocco.get("maiuscolo", False)
         current_font_path = font_path_bold if is_bold else font_path_regular
         
         font_size = 65
-        min_font_size = 12
+        min_font_size = 14 # Alzato a 14 per mantenere leggibilità
         testo_adattato = testo
         font_scelto = None
         
         while font_size >= min_font_size:
-            try: 
-                font = ImageFont.truetype(current_font_path, font_size)
-            except IOError:
-                break
+            try: font = ImageFont.truetype(current_font_path, font_size)
+            except IOError: break
 
             avg_char_width = font.getlength("a") or 1
-            chars_per_line = max(1, int(box_width / avg_char_width))
-            testo_splittato = textwrap.fill(testo, width=chars_per_line)
+            chars_per_line = max(1, int(max_allowed_width / avg_char_width))
+            
+            # BREAK_LONG_WORDS=FALSE impedisce che parole come "FEUCHTIGKEITSSPENDEND" vengano spezzate a metà
+            testo_splittato = textwrap.fill(testo, width=chars_per_line, break_long_words=False)
             
             bbox = draw.multiline_textbbox((0, 0), testo_splittato, font=font, align="center")
             text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
             
-            if text_w <= box_width and text_h <= box_height:
+            # Verifichiamo contro i confini espansi, non contro la scatola originale stretta
+            if text_w <= max_allowed_width and text_h <= max_allowed_height:
                 testo_adattato = testo_splittato
                 font_scelto = font
                 break
             font_size -= 2
             
         if not font_scelto:
-            try:
-                font_scelto = ImageFont.truetype(current_font_path, min_font_size)
-            except IOError:
-                font_scelto = ImageFont.load_default()
-            
+            try: font_scelto = ImageFont.truetype(current_font_path, min_font_size)
+            except IOError: font_scelto = ImageFont.load_default()
             avg_char_width = font_scelto.getlength("a") or 1
-            testo_adattato = textwrap.fill(testo, width=max(1, int(box_width / avg_char_width)))
+            testo_adattato = textwrap.fill(testo, width=max(1, int(max_allowed_width / avg_char_width)), break_long_words=False)
 
         bbox = draw.multiline_textbbox((0, 0), testo_adattato, font=font_scelto, align="center")
-        final_w = bbox[2] - bbox[0]
-        final_h = bbox[3] - bbox[1]
+        final_w, final_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
         
+        # La centratura usa ancora box_width originale, così il testo cresce dal centro verso l'esterno
         x_pos = min_x + (box_width - final_w) / 2 - bbox[0]
         y_pos = min_y + (box_height - final_h) / 2 - bbox[1]
         
