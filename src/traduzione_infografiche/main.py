@@ -118,7 +118,8 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
         target_image_part,
         "Ecco i testi estratti (ID: Testo):",
         f"{json.dumps(dizionario_testi, ensure_ascii=False)}",
-        "\nATTENZIONE AI TESTI SPEZZATI: Se una singola frase è stata divisa dall'OCR in più ID (es. ID 1: 'Senza', ID 2: 'ungere'), unisci l'intera traduzione nel primo ID e per i successivi restituisci ESPLICITAMENTE una stringa vuota \"\".",
+        "\nATTENZIONE AI TESTI SPEZZATI: Se una singola frase è stata divisa dall'OCR in più ID, unisci l'intera traduzione nel primo ID e per i successivi restituisci ESPLICITAMENTE una stringa vuota \"\".",
+        "\nATTENZIONE AL GRASSETTO: Per i testi classificati come 'banner' o 'sottotitolo', valuta se visivamente contengono parole in grassetto. Imposta 'grassetto': true se c'è ALMENO UNA parola visibilmente più spessa/in grassetto nel blocco, altrimenti false.",
         "Restituisci SOLO un JSON valido con questa struttura per le traduzioni in en, fr, de, es, nl:",
         "{\"banner\": [{\"id\": 1, \"grassetto\": true, \"traduzioni\": {\"en\": \"...\"}}], \"sottotitolo\": [{\"id\": 2, \"grassetto\": false, \"traduzioni\": {\"en\": \"...\"}}], \"da_ignorare\": [3]}"
     ])
@@ -129,15 +130,61 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
     )
     return json.loads(response.text.strip())
 
+
 def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
+    import copy # Assicuriamoci che sia importato
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     draw = ImageDraw.Draw(img)
     
     font_path_regular = "montserrat.ttf"
     font_path_bold = "montserrat-bold.ttf"
 
-    # FASE 1: TOPPE DI SFONDO (Senza condizioni: si copre sempre!)
-    for blocco in mappatura_testi:
+    # Facciamo una copia profonda per non corrompere i vertici delle altre lingue
+    mappatura_locale = copy.deepcopy(mappatura_testi)
+
+    # ==========================================
+    # FASE 0: FUSIONE GEOMETRICA DEGLI SPAZI VUOTI
+    # ==========================================
+    blocchi_attivi = []
+    blocchi_vuoti = []
+    
+    for blocco in mappatura_locale:
+        testo = blocco.get(f"testo_tradotto_{lingua}", "")
+        if not testo or str(testo).strip() == "":
+            blocchi_vuoti.append(blocco)
+        else:
+            blocchi_attivi.append(blocco)
+            
+    for vuoto in blocchi_vuoti:
+        if not blocchi_attivi: continue
+        
+        # Troviamo il centro geometrico del blocco vuoto
+        vx, vy = [v['x'] for v in vuoto["vertici_blocco"]], [v['y'] for v in vuoto["vertici_blocco"]]
+        cx_v, cy_v = sum(vx) / len(vx), sum(vy) / len(vy)
+        
+        blocco_vicino = None
+        min_dist = float('inf')
+        
+        # Cerchiamo il blocco attivo più vicino
+        for attivo in blocchi_attivi:
+            ax, ay = [v['x'] for v in attivo["vertici_blocco"]], [v['y'] for v in attivo["vertici_blocco"]]
+            cx_a, cy_a = sum(ax) / len(ax), sum(ay) / len(ay)
+            
+            dist = ((cx_v - cx_a)**2 + (cy_v - cy_a)**2)**0.5
+            
+            # Soglia di sicurezza di 250 pixel per evitare di fondere lati opposti
+            if dist < min_dist and dist < 250:
+                min_dist = dist
+                blocco_vicino = attivo
+                
+        if blocco_vicino:
+            # Estendiamo lo spazio del blocco attivo regalandogli i confini del blocco vuoto!
+            blocco_vicino["vertici_blocco"].extend(vuoto["vertici_blocco"])
+
+    # ==========================================
+    # FASE 1: TOPPE DI SFONDO
+    # ==========================================
+    for blocco in mappatura_locale:
         vertici = blocco["vertici_blocco"]
         xs, ys = [v['x'] for v in vertici], [v['y'] for v in vertici]
         min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
@@ -145,10 +192,11 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         pad = 6
         draw.rectangle([min_x - pad, min_y - pad, max_x + pad, max_y + pad], fill=colore_sfondo)
 
+    # ==========================================
     # FASE 2: SCRITTURA TESTI
-    for blocco in mappatura_testi:
+    # ==========================================
+    for blocco in mappatura_locale:
         testo = blocco.get(f"testo_tradotto_{lingua}", "")
-        # Se la stringa è vuota (perché accorpata prima), la ignoriamo (ma la toppa l'abbiamo messa!)
         if not testo or str(testo).strip() == "": 
             continue
         
@@ -162,7 +210,6 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         box_width = max_x - min_x
         box_height = max_y - min_y
         
-        # Tolleranza minima (+5%) solo per non tagliare i bordi delle lettere
         max_allowed_width = box_width * 1.05
         max_allowed_height = box_height * 1.2
         
