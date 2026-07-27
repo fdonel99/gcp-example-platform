@@ -142,8 +142,10 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     mappatura_locale = copy.deepcopy(mappatura_testi)
 
     # ==========================================
-    # FASE 0.A: MOTORE MATEMATICO ALTEZZA FONT
+    # FASE 0.A: REVERSE-ENGINEERING DEL FONT ORIGINALE
     # ==========================================
+    # Simuliamo di scrivere il testo ORIGINALE nel suo riquadro ORIGINALE
+    # per trovare l'esatta dimensione del font che veniva usata prima della fusione
     for blocco in mappatura_locale:
         vertici = blocco["vertici_blocco"]
         xs = [v['x'] for v in vertici]
@@ -151,16 +153,39 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         box_w = max(xs) - min(xs)
         box_h = max(ys) - min(ys)
         
-        testo_orig = str(blocco.get("testo_originale", ""))
-        num_caratteri = max(1, len(testo_orig.replace("\n", "").strip()))
+        testo_orig = str(blocco.get("testo_originale", "")).strip()
         
-        # Formula geometrica: Area totale / numero di lettere
-        # Un font standard è alto circa il doppio della sua larghezza (h = 2w)
-        # Area = 0.5 * h^2  --->  h = √(2 * Area_carattere)
-        area_per_carattere = (box_w * box_h) / num_caratteri
-        stima_altezza_reale_font = (2 * area_per_carattere) ** 0.5
+        if not testo_orig:
+            blocco["tetto_massimo_font"] = 65
+            continue
+            
+        is_bold = blocco.get("grassetto", False) or blocco.get("maiuscolo", False)
+        current_font_path = font_path_bold if is_bold else font_path_regular
         
-        blocco["altezza_riga_originale"] = stima_altezza_reale_font
+        sim_font_size = 80
+        best_font_size = 12
+        
+        # Abbassiamo gradualmente la dimensione finché il testo italiano non entra nel suo box stretto
+        while sim_font_size >= 12:
+            try: font = ImageFont.truetype(current_font_path, sim_font_size)
+            except IOError: break
+            
+            testo_lineare = testo_orig.replace("\n", " ") 
+            avg_char_width = font.getlength("a") or 1
+            chars_per_line = max(1, int(box_w / avg_char_width))
+            
+            testo_splittato = textwrap.fill(testo_lineare, width=chars_per_line, break_long_words=False)
+            bbox = draw.multiline_textbbox((0, 0), testo_splittato, font=font, align="center")
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            
+            if tw <= box_w and th <= box_h:
+                best_font_size = sim_font_size
+                break
+                
+            sim_font_size -= 2
+            
+        # Fissiamo il limite massimo ESATTO, con solo un 5% di margine di sicurezza
+        blocco["tetto_massimo_font"] = int(best_font_size * 1.05)
 
     # ==========================================
     # FASE 0.B: FUSIONE SPAZI VUOTI
@@ -208,7 +233,7 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         draw.rectangle([min_x - pad, min_y - pad, max_x + pad, max_y + pad], fill=colore_sfondo)
 
     # ==========================================
-    # FASE 2: SCRITTURA TESTI
+    # FASE 2: SCRITTURA TESTI TRADOTTI
     # ==========================================
     for blocco in mappatura_locale:
         testo = blocco.get(f"testo_tradotto_{lingua}", "")
@@ -228,17 +253,17 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         max_allowed_width = box_width * 1.05
         max_allowed_height = box_height * 1.2
         
-        # Rilevamento intelligente grassetto: Gemini + Ricerca MAIUSCOLE
+        # Ripristino intelligente del grassetto perso dall'AI
         testo_pulito = testo.replace("-", " ").replace(".", "").replace(",", "")
         ha_parole_chiave_maiuscole = any(w.isupper() and len(w) > 2 for w in testo_pulito.split())
         
         is_bold = blocco.get("grassetto", False) or blocco.get("maiuscolo", False) or ha_parole_chiave_maiuscole
-        
         colore_testo = tuple(blocco.get("colore_testo", (255, 255, 255)))
         current_font_path = font_path_bold if is_bold else font_path_regular
         
-        # Limite dinamico basato sul vero font originale (+ 20% di respiro)
-        tetto_massimo_font = int(blocco["altezza_riga_originale"] * 1.2)
+        # --- LIMITE DINAMICO ESATTO IN AZIONE ---
+        # Usa il valore scoperto dal reverse engineering!
+        tetto_massimo_font = blocco.get("tetto_massimo_font", 65)
         font_size = min(65, tetto_massimo_font) 
         
         min_font_size = 12 
@@ -361,21 +386,17 @@ def process_infographic_trigger(cloud_event):
                 traduzioni_gemini = metadati["traduzioni"]
                 is_upper = testo_originale.isupper() 
                 
-                # --- ECCO LA PARTE AGGIORNATA ---
                 traduzioni_finali = {}
                 for lang in ["en", "fr", "de", "es", "nl"]:
                     if lang in traduzioni_gemini:
                         testo_tradotto = traduzioni_gemini[lang]
                     else:
-                        # Fallback estremo se Gemini si dimentica una lingua
                         testo_tradotto = testo_originale 
                         
-                    # Decodifica se è testo valido, lascia vuoto se Gemini ci ha restituito una stringa vuota o None
                     if isinstance(testo_tradotto, str) and testo_tradotto.strip() != "":
                         traduzioni_finali[lang] = html.unescape(testo_tradotto)
                     else:
                         traduzioni_finali[lang] = ""
-                # --------------------------------
                 
                 mappatura_testi.append({
                     "testo_originale": testo_originale,
