@@ -139,26 +139,31 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     font_path_regular = "montserrat.ttf"
     font_path_bold = "montserrat-bold.ttf"
 
-    # Facciamo una copia profonda per non corrompere i vertici delle altre lingue
     mappatura_locale = copy.deepcopy(mappatura_testi)
 
     # ==========================================
-    # FASE 0.A: SALVATAGGIO DIMENSIONE REALE DEL FONT
+    # FASE 0.A: MOTORE MATEMATICO ALTEZZA FONT
     # ==========================================
     for blocco in mappatura_locale:
         vertici = blocco["vertici_blocco"]
+        xs = [v['x'] for v in vertici]
         ys = [v['y'] for v in vertici]
-        altezza_totale = max(ys) - min(ys)
+        box_w = max(xs) - min(xs)
+        box_h = max(ys) - min(ys)
         
-        # Contiamo le righe originali (gli a capo + 1)
         testo_orig = str(blocco.get("testo_originale", ""))
-        num_linee = testo_orig.count('\n') + 1
+        num_caratteri = max(1, len(testo_orig.replace("\n", "").strip()))
         
-        # La vera altezza del font è l'altezza totale divisa per il numero di righe!
-        blocco["altezza_riga_originale"] = altezza_totale / num_linee
+        # Formula geometrica: Area totale / numero di lettere
+        # Un font standard è alto circa il doppio della sua larghezza (h = 2w)
+        # Area = 0.5 * h^2  --->  h = √(2 * Area_carattere)
+        area_per_carattere = (box_w * box_h) / num_caratteri
+        stima_altezza_reale_font = (2 * area_per_carattere) ** 0.5
+        
+        blocco["altezza_riga_originale"] = stima_altezza_reale_font
 
     # ==========================================
-    # FASE 0.B: FUSIONE GEOMETRICA DEGLI SPAZI VUOTI
+    # FASE 0.B: FUSIONE SPAZI VUOTI
     # ==========================================
     blocchi_attivi = []
     blocchi_vuoti = []
@@ -184,7 +189,6 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
             cx_a, cy_a = sum(ax) / len(ax), sum(ay) / len(ay)
             
             dist = ((cx_v - cx_a)**2 + (cy_v - cy_a)**2)**0.5
-            
             if dist < min_dist and dist < 250:
                 min_dist = dist
                 blocco_vicino = attivo
@@ -224,12 +228,16 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         max_allowed_width = box_width * 1.05
         max_allowed_height = box_height * 1.2
         
+        # Rilevamento intelligente grassetto: Gemini + Ricerca MAIUSCOLE
+        testo_pulito = testo.replace("-", " ").replace(".", "").replace(",", "")
+        ha_parole_chiave_maiuscole = any(w.isupper() and len(w) > 2 for w in testo_pulito.split())
+        
+        is_bold = blocco.get("grassetto", False) or blocco.get("maiuscolo", False) or ha_parole_chiave_maiuscole
+        
         colore_testo = tuple(blocco.get("colore_testo", (255, 255, 255)))
-        is_bold = blocco.get("grassetto", False) or blocco.get("maiuscolo", False)
         current_font_path = font_path_bold if is_bold else font_path_regular
         
-        # --- LIMITE DINAMICO CORRETTO ---
-        # Usiamo l'altezza calcolata di una singola riga originale come tetto massimo!
+        # Limite dinamico basato sul vero font originale (+ 20% di respiro)
         tetto_massimo_font = int(blocco["altezza_riga_originale"] * 1.2)
         font_size = min(65, tetto_massimo_font) 
         
