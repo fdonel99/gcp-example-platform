@@ -143,13 +143,19 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     mappatura_locale = copy.deepcopy(mappatura_testi)
 
     # ==========================================
-    # FASE 0.A: SALVATAGGIO DIMENSIONI ORIGINALI
+    # FASE 0.A: SALVATAGGIO DIMENSIONE REALE DEL FONT
     # ==========================================
-    # Registriamo l'altezza di ogni blocco prima che venga alterato dalle fusioni
     for blocco in mappatura_locale:
         vertici = blocco["vertici_blocco"]
         ys = [v['y'] for v in vertici]
-        blocco["altezza_originale"] = max(ys) - min(ys)
+        altezza_totale = max(ys) - min(ys)
+        
+        # Contiamo le righe originali (gli a capo + 1)
+        testo_orig = str(blocco.get("testo_originale", ""))
+        num_linee = testo_orig.count('\n') + 1
+        
+        # La vera altezza del font è l'altezza totale divisa per il numero di righe!
+        blocco["altezza_riga_originale"] = altezza_totale / num_linee
 
     # ==========================================
     # FASE 0.B: FUSIONE GEOMETRICA DEGLI SPAZI VUOTI
@@ -222,9 +228,9 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         is_bold = blocco.get("grassetto", False) or blocco.get("maiuscolo", False)
         current_font_path = font_path_bold if is_bold else font_path_regular
         
-        # --- LIMITE DINAMICO ---
-        # L'altezza originale fa da "ancora" per impedire al font di esplodere (+20% di tolleranza di sicurezza)
-        tetto_massimo_font = int(blocco["altezza_originale"] * 1.2)
+        # --- LIMITE DINAMICO CORRETTO ---
+        # Usiamo l'altezza calcolata di una singola riga originale come tetto massimo!
+        tetto_massimo_font = int(blocco["altezza_riga_originale"] * 1.2)
         font_size = min(65, tetto_massimo_font) 
         
         min_font_size = 12 
