@@ -12,7 +12,8 @@ locals {
     "vision.googleapis.com",
     "translate.googleapis.com",
     "aiplatform.googleapis.com",
-    "drive.googleapis.com"  
+    "drive.googleapis.com",
+    "cloudresourcemanager.googleapis.com"  
   ]
 }
 

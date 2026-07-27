@@ -10,13 +10,21 @@ resource "google_project_iam_member" "kommsrls_admin" {
 # 2
 resource "google_project_iam_member" "jacopo_storage_admin" {
   project = "cloud-platform-northstar"
-  role    = "roles/storage.objectAdmin"
+  for_each = toset([
+    "roles/storage.objectAdmin",          
+    "roles/storage.bucketViewer"        
+  ])
+  role = each.value
   member  = "user:jacopo.donelli@northstaritaly.com"
 }
 
 # 3
 resource "google_project_iam_member" "alberto_storage_admin" {
   project = "cloud-platform-northstar"
-  role    = "roles/storage.objectAdmin"
+    for_each = toset([
+    "roles/storage.objectAdmin",          
+    "roles/storage.bucketViewer"        
+  ])
+  role = each.value
   member  = "user:alberto.donelli@northstaritaly.com"
 }
