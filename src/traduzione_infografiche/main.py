@@ -88,10 +88,6 @@ def estrai_colore_testo(img_cv, vertici):
         return (255, 255, 255)
 
 def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
-    """
-    Usa Gemini per classificare i testi E tradurli contestualmente all'immagine,
-    forzando un output JSON strutturato.
-    """
     target_image_part = Part.from_data(data=image_bytes, mime_type=mime_type)
     percorso_esempio = os.path.join(os.path.dirname(__file__), "esempio_infografica.jpg")
     
@@ -100,39 +96,37 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
             esempio_bytes = f.read()
         example_image_part = Part.from_data(data=esempio_bytes, mime_type="image/jpeg")
     except FileNotFoundError:
-        print("ATTENZIONE: File 'esempio_infografica.jpg' non trovato.")
         example_image_part = None
 
     contenuto_prompt = [
-        "Sei un grafico esperto in localizzazione e un traduttore professionista. Il tuo compito è classificare i testi di un'infografica in tre categorie e tradurre quelli rilevanti tenendo sempre in considerazione il contesto dell'immagine (es. se è un cosmetico, usa termini adatti).",
+        "Sei un grafico esperto in localizzazione e un traduttore professionista. Il tuo compito è classificare i testi di un'infografica e tradurre quelli rilevanti tenendo in considerazione il contesto visivo.",
     ]
 
     if example_image_part:
         contenuto_prompt.extend([
             "=== INIZIO ESEMPIO DI RIFERIMENTO ===",
             example_image_part,
-            "Regole derivate da questo esempio:\n"
-            "- 'banner': Il testo principale posizionato all'interno della grande fascia colorata a tinta unita (es. 'PER COCCOLARE LA TUA PELLE DOPO IL SOLE').\n"
-            "- 'sottotitolo': Testo informativo o promozionale secondario, scritto in modo lineare e dritto (es. 'NEL RISPETTO DELLA NATURA' dentro il cerchio).\n"
-            "- 'da_ignorare': Testi stampati fisicamente sul prodotto (es. 'Bee it', 'SAVE THE BEES') e testi decorativi scritti in circolo attorno alle icone (es. 'DERMATOLOGICAMENTE TESTATO').\n"
+            "Regole derivate:\n"
+            "- 'banner': Il testo principale nella grande fascia colorata.\n"
+            "- 'sottotitolo': Testo informativo secondario, dritto.\n"
+            "- 'da_ignorare': Testi fisici sul prodotto o decorativi curvi.\n"
             "=== FINE ESEMPIO DI RIFERIMENTO ===\n\n"
         ])
 
     contenuto_prompt.extend([
-        "Analizza questa NUOVA infografica applicando rigorosamente le logiche dell'esempio visivo per la classificazione, e traduci i testi approvati:",
+        "Analizza questa NUOVA infografica.",
         target_image_part,
         "Ecco i testi estratti (ID: Testo):",
         f"{json.dumps(dizionario_testi, ensure_ascii=False)}",
-        "\nPer i testi classificati come 'banner' o 'sottotitolo', valuta se visivamente appaiono in grassetto (grassetto: true o false).",
-        "Devi restituire SOLO un JSON valido con questa esatta struttura, includendo le traduzioni contestualizzate in inglese (en), francese (fr), tedesco (de), spagnolo (es) e olandese (nl):",
-        "{\"banner\": [{\"id\": 1, \"grassetto\": true, \"traduzioni\": {\"en\": \"...\", \"fr\": \"...\", \"de\": \"...\", \"es\": \"...\", \"nl\": \"...\"}}], \"sottotitolo\": [{\"id\": 2, \"grassetto\": false, \"traduzioni\": {\"en\": \"...\", \"fr\": \"...\", \"de\": \"...\", \"es\": \"...\", \"nl\": \"...\"}}], \"da_ignorare\": [3]}"
+        "\nATTENZIONE AI TESTI SPEZZATI: Se una singola frase è stata divisa dall'OCR in più ID (es. ID 1: 'Senza', ID 2: 'ungere'), unisci l'intera traduzione nel primo ID e per i successivi restituisci ESPLICITAMENTE una stringa vuota \"\".",
+        "Restituisci SOLO un JSON valido con questa struttura per le traduzioni in en, fr, de, es, nl:",
+        "{\"banner\": [{\"id\": 1, \"grassetto\": true, \"traduzioni\": {\"en\": \"...\"}}], \"sottotitolo\": [{\"id\": 2, \"grassetto\": false, \"traduzioni\": {\"en\": \"...\"}}], \"da_ignorare\": [3]}"
     ])
     
     response = gemini_model.generate_content(
         contenuto_prompt,
         generation_config={"response_mime_type": "application/json"}
     )
-    
     return json.loads(response.text.strip())
 
 def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
@@ -142,10 +136,8 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     font_path_regular = "montserrat.ttf"
     font_path_bold = "montserrat-bold.ttf"
 
-    # FASE 1: Toppe di sfondo (Invariata)
+    # FASE 1: TOPPE DI SFONDO (Senza condizioni: si copre sempre!)
     for blocco in mappatura_testi:
-        testo = blocco[f"testo_tradotto_{lingua}"]
-        if not testo: continue
         vertici = blocco["vertici_blocco"]
         xs, ys = [v['x'] for v in vertici], [v['y'] for v in vertici]
         min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
@@ -153,13 +145,15 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         pad = 6
         draw.rectangle([min_x - pad, min_y - pad, max_x + pad, max_y + pad], fill=colore_sfondo)
 
-    # FASE 2: Scrittura Testi
+    # FASE 2: SCRITTURA TESTI
     for blocco in mappatura_testi:
-        testo = blocco[f"testo_tradotto_{lingua}"]
-        if not testo: continue
+        testo = blocco.get(f"testo_tradotto_{lingua}", "")
+        # Se la stringa è vuota (perché accorpata prima), la ignoriamo (ma la toppa l'abbiamo messa!)
+        if not testo or str(testo).strip() == "": 
+            continue
         
         if blocco.get("maiuscolo", False):
-            testo = testo.upper()
+            testo = str(testo).upper()
             
         vertici = blocco["vertici_blocco"]
         xs, ys = [v['x'] for v in vertici], [v['y'] for v in vertici]
@@ -168,22 +162,16 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         box_width = max_x - min_x
         box_height = max_y - min_y
         
-        # ESPANSIONE DINAMICA: Permettiamo al testo di sbordare un po' se le parole sono lunghe
-        # I titoli (banner) possono espandersi molto di più in larghezza
-        tolleranza_w = 1.6 if blocco.get("tipo") == "banner" else 1.2
-        tolleranza_h = 1.5
-        max_allowed_width = box_width * tolleranza_w
-        max_allowed_height = box_height * tolleranza_h
+        # Tolleranza minima (+5%) solo per non tagliare i bordi delle lettere
+        max_allowed_width = box_width * 1.05
+        max_allowed_height = box_height * 1.2
         
         colore_testo = tuple(blocco.get("colore_testo", (255, 255, 255)))
-        
-        # FORZATURA GRASSETTO: Se il testo era in maiuscolo, lo forziamo in grassetto
-        # altrimenti risulterebbe illeggibile sui badge piccoli.
         is_bold = blocco.get("grassetto", False) or blocco.get("maiuscolo", False)
         current_font_path = font_path_bold if is_bold else font_path_regular
         
         font_size = 65
-        min_font_size = 14 # Alzato a 14 per mantenere leggibilità
+        min_font_size = 12 
         testo_adattato = testo
         font_scelto = None
         
@@ -194,13 +182,10 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
             avg_char_width = font.getlength("a") or 1
             chars_per_line = max(1, int(max_allowed_width / avg_char_width))
             
-            # BREAK_LONG_WORDS=FALSE impedisce che parole come "FEUCHTIGKEITSSPENDEND" vengano spezzate a metà
             testo_splittato = textwrap.fill(testo, width=chars_per_line, break_long_words=False)
-            
             bbox = draw.multiline_textbbox((0, 0), testo_splittato, font=font, align="center")
             text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
             
-            # Verifichiamo contro i confini espansi, non contro la scatola originale stretta
             if text_w <= max_allowed_width and text_h <= max_allowed_height:
                 testo_adattato = testo_splittato
                 font_scelto = font
@@ -216,7 +201,6 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         bbox = draw.multiline_textbbox((0, 0), testo_adattato, font=font_scelto, align="center")
         final_w, final_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
         
-        # La centratura usa ancora box_width originale, così il testo cresce dal centro verso l'esterno
         x_pos = min_x + (box_width - final_w) / 2 - bbox[0]
         y_pos = min_y + (box_height - final_h) / 2 - bbox[1]
         
@@ -307,11 +291,21 @@ def process_infographic_trigger(cloud_event):
                 traduzioni_gemini = metadati["traduzioni"]
                 is_upper = testo_originale.isupper() 
                 
-                # Salviamo le traduzioni restituite da Gemini (applicando unescape di sicurezza)
+                # --- ECCO LA PARTE AGGIORNATA ---
                 traduzioni_finali = {}
                 for lang in ["en", "fr", "de", "es", "nl"]:
-                    testo_tradotto = traduzioni_gemini.get(lang, testo_originale) # Fallback sul testo originale se manca
-                    traduzioni_finali[lang] = html.unescape(testo_tradotto)
+                    if lang in traduzioni_gemini:
+                        testo_tradotto = traduzioni_gemini[lang]
+                    else:
+                        # Fallback estremo se Gemini si dimentica una lingua
+                        testo_tradotto = testo_originale 
+                        
+                    # Decodifica se è testo valido, lascia vuoto se Gemini ci ha restituito una stringa vuota o None
+                    if isinstance(testo_tradotto, str) and testo_tradotto.strip() != "":
+                        traduzioni_finali[lang] = html.unescape(testo_tradotto)
+                    else:
+                        traduzioni_finali[lang] = ""
+                # --------------------------------
                 
                 mappatura_testi.append({
                     "testo_originale": testo_originale,
