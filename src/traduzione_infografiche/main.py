@@ -6,10 +6,10 @@ from datetime import datetime
 import functions_framework
 from google.cloud import storage
 from google.cloud import vision
-from google.cloud import translate_v2 as translate
 import vertexai
 from vertexai.generative_models import GenerativeModel, Part
 import cv2
+import html
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
@@ -20,7 +20,6 @@ OUTPUT_BUCKET_NAME = "bkt-infografica-output"
 
 storage_client = storage.Client()
 vision_client = vision.ImageAnnotatorClient()
-translate_client = translate.Client()
 
 # Inizializza Vertex AI per Gemini
 vertexai.init(project=PROJECT_ID, location=REGION)
@@ -86,10 +85,10 @@ def estrai_colore_testo(img_cv, vertici):
         print(f"Errore estrazione colore testo: {e}")
         return (255, 255, 255)
 
-def analizza_con_gemini(image_bytes, mime_type, dizionario_testi):
+def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
     """
-    Usa Gemini in modalità Multimodal Few-Shot Prompting.
-    Costringe l'API a rispondere esclusivamente con un JSON strutturato.
+    Usa Gemini per classificare i testi E tradurli contestualmente all'immagine,
+    forzando un output JSON strutturato.
     """
     target_image_part = Part.from_data(data=image_bytes, mime_type=mime_type)
     percorso_esempio = os.path.join(os.path.dirname(__file__), "esempio_infografica.jpg")
@@ -103,7 +102,7 @@ def analizza_con_gemini(image_bytes, mime_type, dizionario_testi):
         example_image_part = None
 
     contenuto_prompt = [
-        "Sei un grafico esperto in localizzazione. Il tuo compito è classificare i testi di un'infografica in tre categorie.",
+        "Sei un grafico esperto in localizzazione e un traduttore professionista. Il tuo compito è classificare i testi di un'infografica in tre categorie e tradurre quelli rilevanti tenendo sempre in considerazione il contesto dell'immagine (es. se è un cosmetico, usa termini adatti).",
     ]
 
     if example_image_part:
@@ -118,22 +117,22 @@ def analizza_con_gemini(image_bytes, mime_type, dizionario_testi):
         ])
 
     contenuto_prompt.extend([
-        "Analizza questa NUOVA infografica applicando rigorosamente le logiche dell'esempio visivo:",
+        "Analizza questa NUOVA infografica applicando rigorosamente le logiche dell'esempio visivo per la classificazione, e traduci i testi approvati:",
         target_image_part,
         "Ecco i testi estratti (ID: Testo):",
         f"{json.dumps(dizionario_testi, ensure_ascii=False)}",
         "\nPer i testi classificati come 'banner' o 'sottotitolo', valuta se visivamente appaiono in grassetto (grassetto: true o false).",
-        "Devi restituire SOLO un JSON valido con questa esatta struttura:",
-        "{\"banner\": [{\"id\": 1, \"grassetto\": true}], \"sottotitolo\": [{\"id\": 2, \"grassetto\": false}], \"da_ignorare\": [3]}"
+        "Devi restituire SOLO un JSON valido con questa esatta struttura, includendo le traduzioni contestualizzate in inglese (en), francese (fr), tedesco (de), spagnolo (es) e olandese (nl):",
+        "{\"banner\": [{\"id\": 1, \"grassetto\": true, \"traduzioni\": {\"en\": \"...\", \"fr\": \"...\", \"de\": \"...\", \"es\": \"...\", \"nl\": \"...\"}}], \"sottotitolo\": [{\"id\": 2, \"grassetto\": false, \"traduzioni\": {\"en\": \"...\", \"fr\": \"...\", \"de\": \"...\", \"es\": \"...\", \"nl\": \"...\"}}], \"da_ignorare\": [3]}"
     ])
     
-    # Obblighiamo Vertex AI a restituire un JSON pulito
     response = gemini_model.generate_content(
         contenuto_prompt,
         generation_config={"response_mime_type": "application/json"}
     )
     
     return json.loads(response.text.strip())
+
 def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     draw = ImageDraw.Draw(img)
@@ -141,11 +140,30 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     font_path_regular = "montserrat.ttf"
     font_path_bold = "montserrat-bold.ttf"
 
+    # ==========================================
+    # FASE 1: DISEGNO DI TUTTE LE TOPPE DI SFONDO
+    # ==========================================
+    for blocco in mappatura_testi:
+        testo = blocco[f"testo_tradotto_{lingua}"]
+        if not testo: continue
+            
+        vertici = blocco["vertici_blocco"]
+        xs = [v['x'] for v in vertici]
+        ys = [v['y'] for v in vertici]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        
+        colore_sfondo = tuple(blocco.get("colore_sfondo", (232, 106, 33)))
+        pad = 6
+        draw.rectangle([min_x - pad, min_y - pad, max_x + pad, max_y + pad], fill=colore_sfondo)
+
+    # ==========================================
+    # FASE 2: SCRITTURA DEI TESTI TRADOTTI
+    # ==========================================
     for blocco in mappatura_testi:
         testo = blocco[f"testo_tradotto_{lingua}"]
         if not testo: continue
         
-        # 1. Applicazione automatica del maiuscolo
         if blocco.get("maiuscolo", False):
             testo = testo.upper()
             
@@ -158,14 +176,9 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         box_width = max_x - min_x
         box_height = max_y - min_y
         
-        colore_sfondo = tuple(blocco.get("colore_sfondo", (232, 106, 33)))
         colore_testo = tuple(blocco.get("colore_testo", (255, 255, 255)))
         is_bold = blocco.get("grassetto", False)
         current_font_path = font_path_bold if is_bold else font_path_regular
-        pad = 6
-        
-        # 2. Toppa localizzata per coprire il vecchio testo
-        draw.rectangle([min_x - pad, min_y - pad, max_x + pad, max_y + pad], fill=colore_sfondo)
         
         font_size = 65
         min_font_size = 12
@@ -176,8 +189,6 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
             try: 
                 font = ImageFont.truetype(current_font_path, font_size)
             except IOError:
-                font = ImageFont.load_default()
-                font_scelto = font
                 break
 
             avg_char_width = font.getlength("a") or 1
@@ -194,16 +205,18 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
             font_size -= 2
             
         if not font_scelto:
-            try: font_scelto = ImageFont.truetype(current_font_path, min_font_size)
-            except: font_scelto = ImageFont.load_default()
-            testo_adattato = textwrap.fill(testo, width=max(1, int(box_width / 8)))
+            try:
+                font_scelto = ImageFont.truetype(current_font_path, min_font_size)
+            except IOError:
+                font_scelto = ImageFont.load_default()
+            
+            avg_char_width = font_scelto.getlength("a") or 1
+            testo_adattato = textwrap.fill(testo, width=max(1, int(box_width / avg_char_width)))
 
-        # 3. Disegno e Centratura Ottica Compensata
         bbox = draw.multiline_textbbox((0, 0), testo_adattato, font=font_scelto, align="center")
         final_w = bbox[2] - bbox[0]
         final_h = bbox[3] - bbox[1]
         
-        # Sottraiamo bbox[0] e bbox[1] per eliminare i margini invisibili del font
         x_pos = min_x + (box_width - final_w) / 2 - bbox[0]
         y_pos = min_y + (box_height - final_h) / 2 - bbox[1]
         
@@ -255,66 +268,58 @@ def process_infographic_trigger(cloud_event):
         
         mappatura_testi = []
         
-        # 3. Chiamata a Gemini per la Classificazione Semantica
+        # 3. Chiamata a Gemini per Classificazione E Traduzione Semantica
         print("Interrogazione Gemini in corso...")
         if testi_vision:
-            classificazione_gemini = analizza_con_gemini(original_image_bytes, mime_type, testi_vision)
+            classificazione_gemini = analizza_e_traduci_con_gemini(original_image_bytes, mime_type, testi_vision)
             
-            # Gestione sicura e cast degli ID a interi
+            # Gestione sicura del JSON esteso
             info_traduzione = {}
             for cat in ["banner", "sottotitolo"]:
                 lista_raw = classificazione_gemini.get(cat, [])
                 for item in lista_raw:
                     if isinstance(item, dict) and "id" in item:
                         try:
-                            # FORZATURA A NUMERO INTERO
                             id_pulito = int(item["id"])
                             info_traduzione[id_pulito] = {
                                 "tipo": cat, 
-                                "grassetto": item.get("grassetto", False)
-                            }
-                        except ValueError:
-                            continue
-                    elif isinstance(item, (int, str)): # Fallback se Gemini formatta male
-                        try:
-                            info_traduzione[int(item)] = {
-                                "tipo": cat,
-                                "grassetto": False
+                                "grassetto": item.get("grassetto", False),
+                                "traduzioni": item.get("traduzioni", {})
                             }
                         except ValueError:
                             continue
                             
             ids_da_tradurre = list(info_traduzione.keys())
-            print(f"Gemini ha autorizzato la traduzione per gli ID: {ids_da_tradurre}")
+            print(f"Gemini ha elaborato e tradotto gli ID: {ids_da_tradurre}")
             
             # 4. Processamento ed Estrazione Dati solo per gli ID approvati
             for id_blocco, block, testo_originale in blocchi_vision:
                 if id_blocco not in ids_da_tradurre:
-                    print(f"Skipped (Ignorato da Gemini): {testo_originale[:15]}...")
                     continue
                     
                 vertici = formatta_vertici(block.bounding_box.vertices)
                 colore_sfondo = estrai_colore_sfondo(img_cv, vertici)
                 colore_testo = estrai_colore_testo(img_cv, vertici)
                 
-                # Otteniamo i metadati stabiliti da Gemini e dal codice Python
                 metadati = info_traduzione[id_blocco]
                 is_bold = metadati["grassetto"]
                 tipo_testo = metadati["tipo"]
-                is_upper = testo_originale.isupper() # Rilevamento automatico Python
+                traduzioni_gemini = metadati["traduzioni"]
+                is_upper = testo_originale.isupper() 
                 
-                traduzioni = {}
+                # Salviamo le traduzioni restituite da Gemini (applicando unescape di sicurezza)
+                traduzioni_finali = {}
                 for lang in ["en", "fr", "de", "es", "nl"]:
-                    trad = translate_client.translate(testo_originale, target_language=lang)
-                    traduzioni[lang] = trad["translatedText"]
+                    testo_tradotto = traduzioni_gemini.get(lang, testo_originale) # Fallback sul testo originale se manca
+                    traduzioni_finali[lang] = html.unescape(testo_tradotto)
                 
                 mappatura_testi.append({
                     "testo_originale": testo_originale,
-                    "testo_tradotto_en": traduzioni["en"],
-                    "testo_tradotto_fr": traduzioni["fr"],
-                    "testo_tradotto_de": traduzioni["de"],
-                    "testo_tradotto_es": traduzioni["es"], 
-                    "testo_tradotto_nl": traduzioni["nl"], 
+                    "testo_tradotto_en": traduzioni_finali["en"],
+                    "testo_tradotto_fr": traduzioni_finali["fr"],
+                    "testo_tradotto_de": traduzioni_finali["de"],
+                    "testo_tradotto_es": traduzioni_finali["es"], 
+                    "testo_tradotto_nl": traduzioni_finali["nl"], 
                     "vertici_blocco": vertici,
                     "colore_sfondo": colore_sfondo,
                     "colore_testo": colore_testo,

@@ -1,7 +1,6 @@
 functions-framework==3.*
 google-cloud-storage
 google-cloud-vision
-google-cloud-translate
 google-cloud-aiplatform
 opencv-python-headless
 numpy
