@@ -132,7 +132,7 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
 
 
 def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
-    import copy # Assicuriamoci che sia importato
+    import copy 
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     draw = ImageDraw.Draw(img)
     
@@ -143,7 +143,16 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     mappatura_locale = copy.deepcopy(mappatura_testi)
 
     # ==========================================
-    # FASE 0: FUSIONE GEOMETRICA DEGLI SPAZI VUOTI
+    # FASE 0.A: SALVATAGGIO DIMENSIONI ORIGINALI
+    # ==========================================
+    # Registriamo l'altezza di ogni blocco prima che venga alterato dalle fusioni
+    for blocco in mappatura_locale:
+        vertici = blocco["vertici_blocco"]
+        ys = [v['y'] for v in vertici]
+        blocco["altezza_originale"] = max(ys) - min(ys)
+
+    # ==========================================
+    # FASE 0.B: FUSIONE GEOMETRICA DEGLI SPAZI VUOTI
     # ==========================================
     blocchi_attivi = []
     blocchi_vuoti = []
@@ -158,27 +167,23 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     for vuoto in blocchi_vuoti:
         if not blocchi_attivi: continue
         
-        # Troviamo il centro geometrico del blocco vuoto
         vx, vy = [v['x'] for v in vuoto["vertici_blocco"]], [v['y'] for v in vuoto["vertici_blocco"]]
         cx_v, cy_v = sum(vx) / len(vx), sum(vy) / len(vy)
         
         blocco_vicino = None
         min_dist = float('inf')
         
-        # Cerchiamo il blocco attivo più vicino
         for attivo in blocchi_attivi:
             ax, ay = [v['x'] for v in attivo["vertici_blocco"]], [v['y'] for v in attivo["vertici_blocco"]]
             cx_a, cy_a = sum(ax) / len(ax), sum(ay) / len(ay)
             
             dist = ((cx_v - cx_a)**2 + (cy_v - cy_a)**2)**0.5
             
-            # Soglia di sicurezza di 250 pixel per evitare di fondere lati opposti
             if dist < min_dist and dist < 250:
                 min_dist = dist
                 blocco_vicino = attivo
                 
         if blocco_vicino:
-            # Estendiamo lo spazio del blocco attivo regalandogli i confini del blocco vuoto!
             blocco_vicino["vertici_blocco"].extend(vuoto["vertici_blocco"])
 
     # ==========================================
@@ -217,7 +222,11 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         is_bold = blocco.get("grassetto", False) or blocco.get("maiuscolo", False)
         current_font_path = font_path_bold if is_bold else font_path_regular
         
-        font_size = 65
+        # --- LIMITE DINAMICO ---
+        # L'altezza originale fa da "ancora" per impedire al font di esplodere (+20% di tolleranza di sicurezza)
+        tetto_massimo_font = int(blocco["altezza_originale"] * 1.2)
+        font_size = min(65, tetto_massimo_font) 
+        
         min_font_size = 12 
         testo_adattato = testo
         font_scelto = None
