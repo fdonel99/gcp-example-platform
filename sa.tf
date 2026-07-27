@@ -35,6 +35,10 @@ resource "google_service_account" "clous_deployer" {
 
 resource "google_project_iam_member" "github_clous_deployer_editor" {
   project = "cloud-platform-northstar"
-  role    = "roles/editor"
+  for_each = toset([
+    "roles/editor",          
+    "roles/resourcemanager.projectIamAdmin"        
+  ])
+  role = each.value
   member  = "serviceAccount:${google_service_account.clous_deployer.email}"
 }
