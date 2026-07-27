@@ -6,6 +6,7 @@ data "archive_file" "zip_calcolo_spese_trasporto" {
   type        = "zip"
   source_dir  = "${path.module}/src/calcolo_spese_trasporto" 
   output_path = "${path.module}/src/calcolo_spese_trasporto.zip"
+  
 }
 
 resource "google_storage_bucket_object" "upload_zip_calcolo_spese_trasporto" {
@@ -43,6 +44,7 @@ resource "google_cloudfunctions2_function" "function_calcolo_spese_trasporto" {
     trigger_region        = "eu"
     event_type            = "google.cloud.storage.object.v1.finalized"
     service_account_email = google_service_account.cloud_worker.email
+    retry_policy          = "RETRY_POLICY_DO_NOT_RETRY"
     
     event_filters {
       attribute = "bucket"

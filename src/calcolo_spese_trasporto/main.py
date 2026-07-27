@@ -25,6 +25,38 @@ def estrai_dimensioni(testo):
         return pd.Series([numeri[0], np.nan, np.nan])
     else:
         return pd.Series([np.nan, np.nan, np.nan])
+    
+def correggi_peso(val):
+    if pd.isna(val) or str(val).strip() == "":
+        return 0.0
+    
+    # Se Pandas lo ha già importato come numero, è già corretto
+    if isinstance(val, (int, float)):
+        return float(val)
+    
+    # Se è una stringa (es. "1.500,50 kg"), la ripuliamo
+    testo = str(val).strip()
+    
+    # Rimuove qualsiasi lettera o spazio (es. "kg", "g")
+    testo = re.sub(r'[a-zA-Z\s]', '', testo)
+    
+    # Gestione del formato italiano (es. 1.500,50)
+    if '.' in testo and ',' in testo:
+        testo = testo.replace('.', '')     # Rimuove il punto delle migliaia
+        testo = testo.replace(',', '.')    # Trasforma la virgola nel decimale di Python
+    # Se c'è solo la virgola (es. 1500,50)
+    elif ',' in testo:
+        testo = testo.replace(',', '.')
+    # Se c'è solo il punto, capiamo se sono migliaia
+    elif '.' in testo:
+        # Se dopo il punto ci sono esattamente 3 cifre, molto probabilmente sono migliaia (es. "1.500")
+        if bool(re.search(r'\.\d{3}$', testo)):
+            testo = testo.replace('.', '')
+            
+    try:
+        return float(testo)
+    except ValueError:
+        return 0.0
 
 
 def assegna_CLASSE(row):
@@ -332,16 +364,13 @@ def elabora_costi_logistici(input_path, output_path, bucket_supporto):
     for col in ['DIMENSIONE_1', 'DIMENSIONE_2', 'DIMENSIONE_3']:
         df[col] = df[col].astype(str).str.replace(',', '.').astype(float)
         
-    df["PESO_VOLUMETRICO"] = (df["DIMENSIONE_1"] * df["DIMENSIONE_2"] * df["DIMENSIONE_3"]) / 5000
+    df["PESO_VOLUMETRICO"] = (df["DIMENSIONE_1"] * df["DIMENSIONE_2"] * df["DIMENSIONE_3"]) / 5
     
     # === INIZIO CORREZIONE PESO ===
-    df["PESO"] = df["PESO"].astype(str).str.replace(r'\.0$', '', regex=True)
-    df["PESO"] = df["PESO"].str.replace('.', '', regex=False)
-    df["PESO"] = df["PESO"].str.replace(',', '.', regex=False)
-    df["PESO"] = df["PESO"].str.replace(r'[^\d.]', '', regex=True)
-    df["PESO"] = pd.to_numeric(df["PESO"], errors='coerce')
+    df["PESO"] = df["PESO"].apply(correggi_peso)
     # === FINE CORREZIONE PESO ===
     
+    # Ora il max prenderà sempre i valori corretti
     df["PESO X AMAZON"] = df[["PESO_VOLUMETRICO", "PESO"]].max(axis=1)
     
     # =====================================================================

@@ -25,7 +25,7 @@ TELEGRAM_CHAT_ID = '5122727806'
 # --- CONFIGURAZIONE CLOUD ---
 PROJECT_ID = 'cloud-platform-northstar'
 DATASET_ID = 'NORTHSTAR'
-BUCKET_NAME = 'export-ns-zip' # Nome del bucket ricavato dai tuoi log
+BUCKET_NAME = 'bkt-export-ns-zip' # Nome del bucket ricavato dai tuoi log
 MOUNT_PATH = '/mnt/bucket'    # Percorso GCS Fuse
 
 def invia_notifica_telegram(messaggio):
@@ -85,7 +85,7 @@ def run_sqlite_to_bigquery(request):
         return msg_blocco, 200
     # ---> FINE CONTROLLO DEI 6 GIORNI <---
 
-    extract_to = '/tmp/extracted/'
+    extract_to = os.path.join(MOUNT_PATH, 'extracted/')
     print(f"Cron avviato. Inizio elaborazione del file recente: '{file_name}'")
 
     try:

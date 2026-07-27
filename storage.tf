@@ -48,6 +48,14 @@ resource "google_storage_bucket" "infografica_output" {
   public_access_prevention    = "enforced"
 }
 
+resource "google_storage_bucket" "tf_state" {
+  name                        = "bkt-tf-state-for-transition"
+  location                    = "EU"
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+}
+
 # CARICAMENTO FILE STATICI NEL BUCKET SPESE TRASPORTO
 resource "google_storage_bucket_object" "file_statici_spese" {
   for_each = fileset("${path.module}/src/file_statici", "*")

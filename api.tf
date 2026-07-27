@@ -11,7 +11,8 @@ locals {
     "bigquerydatatransfer.googleapis.com",
     "vision.googleapis.com",
     "translate.googleapis.com",
-    "aiplatform.googleapis.com"  
+    "aiplatform.googleapis.com",
+    "drive.googleapis.com"  
   ]
 }
 

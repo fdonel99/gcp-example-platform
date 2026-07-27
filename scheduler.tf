@@ -11,8 +11,15 @@ resource "google_cloud_scheduler_job" "schedulazione_drive_to_gcp" {
   http_target {
     http_method = "POST"
     uri         = google_cloudfunctions2_function.function_drive_to_gcp.service_config[0].uri
+    headers = {
+      "Content-Type" = "application/json"
+    }
+    body = base64encode(jsonencode({
+      folder_id = "1ujC-hbN_haUjrg8b3kLVrML0ad_UwTlO"
+    }))
     oidc_token {
       service_account_email = google_service_account.cloud_worker.email
+      audience              = google_cloudfunctions2_function.function_drive_to_gcp.service_config[0].uri
     }
   }
 
@@ -36,6 +43,7 @@ resource "google_cloud_scheduler_job" "schedulazione_tables_loading" {
     uri         = google_cloudfunctions2_function.function_tables_loading.service_config[0].uri
     oidc_token {
       service_account_email = google_service_account.cloud_worker.email
+      audience              = google_cloudfunctions2_function.function_tables_loading.service_config[0].uri
     }
   }
 

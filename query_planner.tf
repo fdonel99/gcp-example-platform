@@ -6,7 +6,7 @@ resource "google_bigquery_data_transfer_config" "schedulazione_anagrafica_prodot
   display_name           = "Query Anagrafica Prodotti"
   location               = "EU"
   data_source_id         = "scheduled_query"
-  schedule               = "every sunday 15:00"
+  schedule               = "every sunday 17:15"
   service_account_name   = google_service_account.cloud_worker.email
 
   params = {
@@ -27,7 +27,7 @@ resource "google_bigquery_data_transfer_config" "schedulazione_report_fornitori"
   display_name           = "Export Report Fornitori"
   location               = "EU"
   data_source_id         = "scheduled_query"
-  schedule               = "every sunday 15:15" 
+  schedule               = "every sunday 17:25" 
   service_account_name   = google_service_account.cloud_worker.email
 
   params = {

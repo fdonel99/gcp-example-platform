@@ -19,6 +19,7 @@ resource "google_cloudfunctions2_function" "function_traduzione_infografiche" {
   location    = "europe-west1"
   description = "Trigger file input per la pipeline delle infografiche"
   
+  
   build_config {
     runtime     = "python311"
     entry_point = "process_infographic_trigger"      
@@ -44,6 +45,7 @@ resource "google_cloudfunctions2_function" "function_traduzione_infografiche" {
     trigger_region        = "eu"
     event_type            = "google.cloud.storage.object.v1.finalized"
     service_account_email = google_service_account.cloud_worker.email
+    retry_policy          = "RETRY_POLICY_DO_NOT_RETRY"
     
     event_filters {
       attribute = "bucket"
