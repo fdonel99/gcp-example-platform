@@ -142,7 +142,7 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     mappatura_locale = copy.deepcopy(mappatura_testi)
 
     # ==========================================
-    # FASE 0: FUSIONE SPAZI VUOTI E CALCOLO FONT (SOLO PER I BLOCCHI FUSI)
+    # FASE 0.A: FUSIONE SPAZI VUOTI E TESTI (Fatta PRIMA del calcolo)
     # ==========================================
     blocchi_attivi = []
     blocchi_vuoti = []
@@ -168,49 +168,61 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
             cx_a, cy_a = sum(ax) / len(ax), sum(ay) / len(ay)
             
             dist = ((cx_v - cx_a)**2 + (cy_v - cy_a)**2)**0.5
-            if dist < min_dist and dist < 250:
+            # Raggio aumentato a 2000px per supportare infografiche in alta risoluzione
+            if dist < min_dist and dist < 2000:
                 min_dist = dist
                 blocco_vicino = attivo
                 
         if blocco_vicino:
-            # === Reverse-Engineering SOLO se è la prima volta che questo blocco viene fuso ===
-            if "tetto_massimo_font" not in blocco_vicino:
-                # Calcoliamo larghezza/altezza PRIMA di espandere i vertici
-                b_vert = blocco_vicino["vertici_blocco"]
-                b_xs, b_ys = [v['x'] for v in b_vert], [v['y'] for v in b_vert]
-                box_w = max(b_xs) - min(b_xs)
-                box_h = max(b_ys) - min(b_ys)
-                
-                testo_orig = str(blocco_vicino.get("testo_originale", "")).strip()
-                is_bold = blocco_vicino.get("grassetto", False) or blocco_vicino.get("maiuscolo", False)
-                current_font_path = font_path_bold if is_bold else font_path_regular
-                
-                sim_font_size = 80
-                best_font_size = 12
-                
-                if testo_orig:
-                    while sim_font_size >= 12:
-                        try: font = ImageFont.truetype(current_font_path, sim_font_size)
-                        except IOError: break
-                        
-                        testo_lineare = testo_orig.replace("\n", " ") 
-                        avg_char_width = font.getlength("a") or 1
-                        chars_per_line = max(1, int(box_w / avg_char_width))
-                        
-                        testo_splittato = textwrap.fill(testo_lineare, width=chars_per_line, break_long_words=False)
-                        bbox = draw.multiline_textbbox((0, 0), testo_splittato, font=font, align="center")
-                        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-                        
-                        if tw <= box_w and th <= box_h:
-                            best_font_size = sim_font_size
-                            break
-                        sim_font_size -= 2
-                        
-                # Salviamo il limite esatto solo per questo blocco fuso (+ 5% tolleranza)
-                blocco_vicino["tetto_massimo_font"] = int(best_font_size * 1.05)
-
-            # Ora estendiamo fisicamente i vertici inglobando lo spazio vuoto
+            # Estendiamo i vertici creando il mega-riquadro
             blocco_vicino["vertici_blocco"].extend(vuoto["vertici_blocco"])
+            # Uniamo il testo originale così il reverse-engineering sarà calibrato sull'intera frase!
+            testo_orig_vicino = str(blocco_vicino.get("testo_originale", "")).strip()
+            testo_orig_vuoto = str(vuoto.get("testo_originale", "")).strip()
+            blocco_vicino["testo_originale"] = f"{testo_orig_vicino} {testo_orig_vuoto}".strip()
+
+    # ==========================================
+    # FASE 0.B: REVERSE-ENGINEERING DEL FONT ORIGINALE
+    # ==========================================
+    # Ora lo eseguiamo SOLO sui blocchi attivi (che ormai hanno assorbito lo spazio necessario)
+    for blocco in blocchi_attivi:
+        vertici = blocco["vertici_blocco"]
+        xs, ys = [v['x'] for v in vertici], [v['y'] for v in vertici]
+        box_w = max(xs) - min(xs)
+        box_h = max(ys) - min(ys)
+        
+        testo_orig = str(blocco.get("testo_originale", "")).strip()
+        
+        if not testo_orig:
+            blocco["tetto_massimo_font"] = 65
+            continue
+            
+        is_bold = blocco.get("grassetto", False) or blocco.get("maiuscolo", False)
+        current_font_path = font_path_bold if is_bold else font_path_regular
+        
+        sim_font_size = 80
+        best_font_size = 12
+        
+        while sim_font_size >= 12:
+            try: font = ImageFont.truetype(current_font_path, sim_font_size)
+            except IOError: break
+            
+            testo_lineare = testo_orig.replace("\n", " ") 
+            avg_char_width = font.getlength("a") or 1
+            chars_per_line = max(1, int(box_w / avg_char_width))
+            
+            testo_splittato = textwrap.fill(testo_lineare, width=chars_per_line, break_long_words=False)
+            bbox = draw.multiline_textbbox((0, 0), testo_splittato, font=font, align="center")
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            
+            if tw <= box_w and th <= box_h:
+                best_font_size = sim_font_size
+                break
+                
+            sim_font_size -= 2
+            
+        # Margine del 5% per accomodare lingue leggermente più ingombranti
+        blocco["tetto_massimo_font"] = int(best_font_size * 1.05)
 
     # ==========================================
     # FASE 1: TOPPE DI SFONDO
@@ -244,7 +256,6 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         max_allowed_width = box_width * 1.05
         max_allowed_height = box_height * 1.2
         
-        # Ripristino intelligente del grassetto
         testo_pulito = testo.replace("-", " ").replace(".", "").replace(",", "")
         ha_parole_chiave_maiuscole = any(w.isupper() and len(w) > 2 for w in testo_pulito.split())
         
@@ -252,7 +263,7 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         colore_testo = tuple(blocco.get("colore_testo", (255, 255, 255)))
         current_font_path = font_path_bold if is_bold else font_path_regular
         
-        # --- APPLICAZIONE DEL LIMITE (Se non fuso, torna al default di 65) ---
+        # Uso il limite calcolato sul grande riquadro unificato!
         tetto_massimo_font = blocco.get("tetto_massimo_font", 65)
         font_size = min(65, tetto_massimo_font) 
         
