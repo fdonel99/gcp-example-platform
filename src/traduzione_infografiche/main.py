@@ -106,10 +106,10 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
         contenuto_prompt.extend([
             "=== INIZIO ESEMPIO DI RIFERIMENTO ===",
             example_image_part,
-            "Regole derivate:\n"
-            "- 'banner': Il testo principale nella grande fascia colorata.\n"
-            "- 'sottotitolo': Testo informativo secondario, dritto.\n"
-            "- 'da_ignorare': Testi fisici sul prodotto o decorativi curvi.\n"
+            "Regole derivate da questo esempio:\n"
+            "- 'banner': Il testo principale posizionato all'interno della grande fascia colorata.\n"
+            "- 'sottotitolo': Testo informativo o promozionale secondario, scritto in modo lineare e dritto (es. 'NEL RISPETTO DELLA NATURA').\n"
+            "- 'da_ignorare': Testi stampati fisicamente sul prodotto (es. 'Bee it', 'SAVE THE BEES') e soprattutto i TESTI DECORATIVI SCRITTI IN CIRCOLO attorno alle icone (es. 'DERMATOLOGICAMENTE TESTATO', 'ANIMAL FRIENDLY', 'SENZA PARABENI', ecc.). IGNORARE QUESTI TESTI CIRCOLARI È FONDAMENTALE.\n"
             "=== FINE ESEMPIO DI RIFERIMENTO ===\n\n"
         ])
 
@@ -129,6 +129,7 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
         generation_config={"response_mime_type": "application/json"}
     )
     return json.loads(response.text.strip())
+
 
 
 def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
