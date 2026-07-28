@@ -14,6 +14,17 @@ resource "google_storage_bucket" "export_ns_zip" {
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
+  versioning {
+    enabled = true
+  }
+  lifecycle_rule {
+    action {
+      type = "Delete"
+    }
+    condition {
+      days_since_noncurrent_time = 21
+    }
+  }
 }
 
 resource "google_storage_bucket" "report_fornitori" {
@@ -30,6 +41,15 @@ resource "google_storage_bucket" "spese_trasporto" {
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
+  lifecycle_rule {
+    action {
+      type = "Delete"
+    }
+    condition {
+      age            = 5
+      matches_suffix = ["elaborato.xlsx"] 
+    }
+  }
 }
 
 resource "google_storage_bucket" "infografica_input" {
@@ -70,9 +90,18 @@ resource "google_storage_bucket" "tf_state" {
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
+  versioning {
+    enabled = true
+  }
+  lifecycle_rule {
+    action {
+      type = "Delete"
+    }
+    condition {
+      days_since_noncurrent_time = 7
+    }
+  }
 }
-
-# CARICAMENTO FILE STATICI NEL BUCKET SPESE TRASPORTO
 resource "google_storage_bucket_object" "file_statici_spese" {
   for_each = fileset("${path.module}/src/file_statici", "*")
 
