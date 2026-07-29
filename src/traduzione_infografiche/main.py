@@ -25,6 +25,24 @@ vision_client = vision.ImageAnnotatorClient()
 vertexai.init(project=PROJECT_ID, location=REGION)
 gemini_model = GenerativeModel("gemini-2.5-flash")
 
+# ==========================================
+# GESTORE LOG PER IL BUCKET
+# ==========================================
+class BucketLogger:
+    def __init__(self):
+        self.logs = []
+    
+    def log(self, messaggio):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        riga = f"[{timestamp}] {messaggio}"
+        print(riga) # Stampa anche nella console di Google Cloud per sicurezza
+        self.logs.append(riga)
+        
+    def get_testo_completo(self):
+        return "\n".join(self.logs)
+
+# ==========================================
+
 def estrai_testo_da_blocco(block):
     testo = ""
     for paragraph in block.paragraphs:
@@ -68,7 +86,7 @@ def estrai_colore_sfondo(img_cv, vertici):
     except Exception:
         return (232, 106, 33)
 
-def estrai_colore_testo(img_cv, vertici, colore_sfondo):
+def estrai_colore_testo(img_cv, vertici, colore_sfondo, logger):
     try:
         xs = [v['x'] for v in vertici]
         ys = [v['y'] for v in vertici]
@@ -96,7 +114,7 @@ def estrai_colore_testo(img_cv, vertici, colore_sfondo):
                 
         return (int(best_color[2]), int(best_color[1]), int(best_color[0]))
     except Exception as e:
-        print(f"Errore colore testo: {e}")
+        logger.log(f"Errore colore testo: {e}")
         return (50, 50, 50)
 
 def rileva_allineamento(block):
@@ -137,8 +155,8 @@ def rileva_allineamento(block):
     else:
         return "center"
 
-def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
-    print("\n--- INIZIO ELABORAZIONE GEMINI ---")
+def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi, logger):
+    logger.log("\n--- INIZIO ELABORAZIONE GEMINI ---")
     target_image_part = Part.from_data(data=image_bytes, mime_type=mime_type)
     percorso_esempio = os.path.join(os.path.dirname(__file__), "esempio_infografica.jpg")
     
@@ -182,17 +200,18 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
         "{\"banner\": [], \"sottotitolo\": [{\"id\": 0, \"grassetto\": true, \"scarti\": [], \"traduzioni\": {\"en\": \"...\", \"fr\": \"...\", \"de\": \"...\", \"es\": \"...\", \"nl\": \"...\"}}], \"da_ignorare\": [4]}"
     ])
     
+    logger.log("Invio richiesta a Gemini 2.5 Flash...")
     response = gemini_model.generate_content(
         contenuto_prompt,
         generation_config={"response_mime_type": "application/json"}
     )
     
     risultato_testo = response.text.strip()
-    print(">>> RAW JSON DA GEMINI:\n", risultato_testo)
-    print("--- FINE ELABORAZIONE GEMINI ---\n")
+    logger.log(f">>> RAW JSON DA GEMINI:\n{risultato_testo}")
+    logger.log("--- FINE ELABORAZIONE GEMINI ---\n")
     return json.loads(risultato_testo)
 
-def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
+def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, logger, formato_img="JPEG"):
     import copy 
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     draw = ImageDraw.Draw(img)
@@ -201,14 +220,14 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     font_path_bold = "montserrat-bold.ttf"
     mappatura_locale = copy.deepcopy(mappatura_testi)
 
-    print(f"\n--- AVVIO DISEGNO TESTO LINGUA: [{lingua.upper()}] ---")
+    logger.log(f"\n--- AVVIO DISEGNO TESTO LINGUA: [{lingua.upper()}] ---")
 
     blocchi_attivi = []
     blocchi_vuoti = []
     
     for blocco in mappatura_locale:
         testo = blocco.get(f"testo_tradotto_{lingua}", "")
-        print(f"[{lingua.upper()}] ID Originale: '{blocco.get('testo_originale')[:20]}...' -> Traduzione Ricevuta: '{testo}'")
+        logger.log(f"[{lingua.upper()}] ID Originale: '{blocco.get('testo_originale')[:20]}...' -> Traduzione Ricevuta: '{testo}'")
         if not testo or str(testo).strip() == "":
             blocchi_vuoti.append(blocco)
         else:
@@ -361,7 +380,7 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format=formato_img)
-    print(f"--- FINE DISEGNO TESTO LINGUA: [{lingua.upper()}] ---\n")
+    logger.log(f"--- FINE DISEGNO TESTO LINGUA: [{lingua.upper()}] ---\n")
     return img_byte_arr.getvalue()
 
 
@@ -374,7 +393,9 @@ def process_infographic_trigger(cloud_event):
     if file_name.endswith("/"): return
     if not file_name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")): return
 
-    print(f"=== INIZIO ELABORAZIONE: {file_name} ===")
+    # Inizializzo il logger
+    logger = BucketLogger()
+    logger.log(f"=== INIZIO ELABORAZIONE: {file_name} ===")
 
     try:
         nome_base, estensione = os.path.splitext(file_name)
@@ -388,7 +409,7 @@ def process_infographic_trigger(cloud_event):
         nparr = np.frombuffer(original_image_bytes, np.uint8)
         img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
-        print("\n--- RICHIESTA OCR (Google Vision) ---")
+        logger.log("\n--- RICHIESTA OCR (Google Vision) ---")
         gcs_uri = f"gs://{bucket_name}/{file_name}"
         image = vision.Image(source=vision.ImageSource(gcs_image_uri=gcs_uri))
         text_response = vision_client.document_text_detection(image=image)
@@ -404,12 +425,12 @@ def process_infographic_trigger(cloud_event):
                 if testo:
                     testi_vision[id_blocco] = testo
                     blocchi_vision.append((id_blocco, block, testo))
-                    print(f"Vision ID {id_blocco}: {testo[:40]}...")
+                    logger.log(f"Vision ID {id_blocco}: {testo[:40]}...")
         
         mappatura_testi = []
         
         if testi_vision:
-            classificazione_gemini = analizza_e_traduci_con_gemini(original_image_bytes, mime_type, testi_vision)
+            classificazione_gemini = analizza_e_traduci_con_gemini(original_image_bytes, mime_type, testi_vision, logger)
             
             info_traduzione = {}
             for cat in ["banner", "sottotitolo"]:
@@ -428,7 +449,7 @@ def process_infographic_trigger(cloud_event):
                             continue
                             
             ids_da_tradurre = list(info_traduzione.keys())
-            print(f">>> Gemini IDs Approvati per la traduzione: {ids_da_tradurre}")
+            logger.log(f">>> Gemini IDs Approvati per la traduzione: {ids_da_tradurre}")
             
             for id_blocco, block, testo_originale in blocchi_vision:
                 if id_blocco not in ids_da_tradurre:
@@ -458,7 +479,7 @@ def process_infographic_trigger(cloud_event):
                     vertici = formatta_vertici(block.bounding_box.vertices)
                     
                 colore_sfondo = estrai_colore_sfondo(img_cv, vertici)
-                colore_testo = estrai_colore_testo(img_cv, vertici, colore_sfondo)
+                colore_testo = estrai_colore_testo(img_cv, vertici, colore_sfondo, logger)
                 allineamento_originale = rileva_allineamento(block)
                 
                 is_bold = metadati["grassetto"]
@@ -496,11 +517,12 @@ def process_infographic_trigger(cloud_event):
         
         destination_bucket = storage_client.bucket(OUTPUT_BUCKET_NAME)
         current_date_str = datetime.now().strftime("%Y-%m-%d")
+        percorso_base_output = f"elaborato_{current_date_str}"
         
-        output_image_name_it = f"elaborato_{current_date_str}/{nome_base}_it{estensione}"
+        output_image_name_it = f"{percorso_base_output}/{nome_base}_it{estensione}"
         source_bucket.copy_blob(source_blob, destination_bucket, new_name=output_image_name_it)
         
-        json_blob = destination_bucket.blob(f"elaborato_{current_date_str}/{nome_base}_metadati.json")
+        json_blob = destination_bucket.blob(f"{percorso_base_output}/{nome_base}_metadati.json")
         json_blob.upload_from_string(
             data=json.dumps(mappatura_testi, indent=2, ensure_ascii=False),
             content_type='application/json'
@@ -510,16 +532,26 @@ def process_infographic_trigger(cloud_event):
         
         for lang in ["en", "fr", "de", "es", "nl"]:
             if mappatura_testi:
-                final_image_bytes = sovrascrivi_testo(original_image_bytes, mappatura_testi, lang, formato_img)
+                final_image_bytes = sovrascrivi_testo(original_image_bytes, mappatura_testi, lang, logger, formato_img)
             else:
                 final_image_bytes = original_image_bytes
                 
-            clean_blob_name = f"elaborato_{current_date_str}/{nome_base}_{lang}{estensione}"
+            clean_blob_name = f"{percorso_base_output}/{nome_base}_{lang}{estensione}"
             clean_blob = destination_bucket.blob(clean_blob_name)
             clean_blob.upload_from_string(final_image_bytes, content_type=content_type)
 
-        print("\n=== ELABORAZIONE COMPLETATA CON SUCCESSO ===")
+        logger.log("\n=== ELABORAZIONE COMPLETATA CON SUCCESSO ===")
 
     except Exception as e:
-        print(f"Errore critico: {e}")
+        logger.log(f"\nERRORE CRITICO: {e}")
         raise e
+    finally:
+        # SALVATAGGIO FISICO DEL FILE DI DEBUG NEL BUCKET
+        try:
+            testo_log = logger.get_testo_completo()
+            percorso_log = f"elaborato_{datetime.now().strftime('%Y-%m-%d')}/{nome_base}_debug.txt"
+            log_blob = destination_bucket.blob(percorso_log)
+            log_blob.upload_from_string(testo_log, content_type='text/plain')
+            print(f"File di log salvato con successo nel bucket come: {percorso_log}")
+        except Exception as log_err:
+            print(f"Impossibile salvare il file di log nel bucket: {log_err}")
