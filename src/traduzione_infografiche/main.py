@@ -35,7 +35,7 @@ class BucketLogger:
     def log(self, messaggio):
         timestamp = datetime.now().strftime("%H:%M:%S")
         riga = f"[{timestamp}] {messaggio}"
-        print(riga) # Stampa anche nella console di Google Cloud per sicurezza
+        print(riga) 
         self.logs.append(riga)
         
     def get_testo_completo(self):
@@ -43,18 +43,18 @@ class BucketLogger:
 
 # ==========================================
 
-def estrai_testo_da_blocco(block):
+def estrai_testo_da_paragrafo(paragraph):
+    """Estrazione più granulare: a livello di paragrafo invece che di blocco."""
     testo = ""
-    for paragraph in block.paragraphs:
-        for word in paragraph.words:
-            for symbol in word.symbols:
-                testo += symbol.text
-                if hasattr(symbol.property, 'detected_break'):
-                    break_type = symbol.property.detected_break.type_
-                    if break_type in [1, 2]:
-                        testo += " "
-                    elif break_type in [3, 5]:
-                        testo += "\n"
+    for word in paragraph.words:
+        for symbol in word.symbols:
+            testo += symbol.text
+            if hasattr(symbol.property, 'detected_break'):
+                break_type = symbol.property.detected_break.type_
+                if break_type in [1, 2]:
+                    testo += " "
+                elif break_type in [3, 5]:
+                    testo += "\n"
     return testo.strip()
 
 def formatta_vertici(vertices):
@@ -87,6 +87,7 @@ def estrai_colore_sfondo(img_cv, vertici):
         return (232, 106, 33)
 
 def estrai_colore_testo(img_cv, vertici, colore_sfondo, logger):
+    """Estrazione del colore basata sulla LUMINANZA per salvare i font sottili."""
     try:
         xs = [v['x'] for v in vertici]
         ys = [v['y'] for v in vertici]
@@ -102,41 +103,51 @@ def estrai_colore_testo(img_cv, vertici, colore_sfondo, logger):
         _, _, centers = cv2.kmeans(pixels, 3, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
         centers = np.uint8(centers)
         
-        bg_bgr = np.array([colore_sfondo[2], colore_sfondo[1], colore_sfondo[0]], dtype=np.float32)
-        max_dist = -1
-        best_color = centers[0]
+        # Calcolo luminanza sfondo (standard Rec. 601)
+        bg_lum = 0.299 * colore_sfondo[2] + 0.587 * colore_sfondo[1] + 0.114 * colore_sfondo[0]
         
-        for center in centers:
-            dist = np.linalg.norm(center.astype(np.float32) - bg_bgr)
-            if dist > max_dist:
-                max_dist = dist
-                best_color = center
-                
+        best_color = centers[0]
+        if bg_lum > 127:
+            # Sfondo chiaro -> Cerca il colore PIÙ SCURO (minima luminanza)
+            min_lum = float('inf')
+            for center in centers:
+                lum = 0.299 * center[2] + 0.587 * center[1] + 0.114 * center[0]
+                if lum < min_lum:
+                    min_lum = lum
+                    best_color = center
+        else:
+            # Sfondo scuro -> Cerca il colore PIÙ CHIARO (massima luminanza)
+            max_lum = -1
+            for center in centers:
+                lum = 0.299 * center[2] + 0.587 * center[1] + 0.114 * center[0]
+                if lum > max_lum:
+                    max_lum = lum
+                    best_color = center
+                    
         return (int(best_color[2]), int(best_color[1]), int(best_color[0]))
     except Exception as e:
         logger.log(f"Errore colore testo: {e}")
         return (50, 50, 50)
 
-def rileva_allineamento(block):
+def rileva_allineamento(paragraph):
     linee = []
     linea_corrente = []
     
-    for paragraph in block.paragraphs:
-        for word in paragraph.words:
-            xs = [v.x for v in word.bounding_box.vertices]
-            linea_corrente.append({"min_x": min(xs), "max_x": max(xs)})
+    for word in paragraph.words:
+        xs = [v.x for v in word.bounding_box.vertices]
+        linea_corrente.append({"min_x": min(xs), "max_x": max(xs)})
+        
+        if any(hasattr(s.property, 'detected_break') and s.property.detected_break.type_ in [3, 5] for s in word.symbols):
+            linee.append(linea_corrente)
+            linea_corrente = []
             
-            if any(hasattr(s.property, 'detected_break') and s.property.detected_break.type_ in [3, 5] for s in word.symbols):
-                linee.append(linea_corrente)
-                linea_corrente = []
-                
     if linea_corrente:
         linee.append(linea_corrente)
         
     linee = [l for l in linee if l] 
     
     if len(linee) <= 1:
-        return "center"
+        return "left" # Default a sinistra per evitare sfasamenti su singole righe (bullet points)
         
     left_margins = [l[0]["min_x"] for l in linee]
     center_margins = [(l[0]["min_x"] + l[-1]["max_x"]) / 2 for l in linee]
@@ -267,7 +278,7 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, logger, formato_img=
         box_h = max(ys) - min(ys)
         
         testo_orig = str(blocco.get("testo_originale", "")).strip()
-        align_mode = blocco.get("allineamento", "center")
+        align_mode = blocco.get("allineamento", "left") # Aggiornato per riflettere il default
         
         if not testo_orig:
             blocco["tetto_massimo_font"] = 65
@@ -332,7 +343,7 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, logger, formato_img=
         is_bold = blocco.get("grassetto", False) or blocco.get("maiuscolo", False) or ha_parole_chiave_maiuscole
         colore_testo = tuple(blocco.get("colore_testo", (255, 255, 255)))
         current_font_path = font_path_bold if is_bold else font_path_regular
-        align_mode = blocco.get("allineamento", "center")
+        align_mode = blocco.get("allineamento", "left") # Modificato
         
         tetto_massimo_font = blocco.get("tetto_massimo_font", 65)
         font_size = min(65, tetto_massimo_font) 
@@ -393,7 +404,6 @@ def process_infographic_trigger(cloud_event):
     if file_name.endswith("/"): return
     if not file_name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")): return
 
-    # Inizializzo il logger
     logger = BucketLogger()
     logger.log(f"=== INIZIO ELABORAZIONE: {file_name} ===")
 
@@ -419,13 +429,19 @@ def process_infographic_trigger(cloud_event):
 
         testi_vision = {}
         blocchi_vision = []
+        id_counter = 0 # Contatore per gli ID sequenziali
+        
         if text_response.full_text_annotation:
-            for id_blocco, block in enumerate(text_response.full_text_annotation.pages[0].blocks):
-                testo = estrai_testo_da_blocco(block)
-                if testo:
-                    testi_vision[id_blocco] = testo
-                    blocchi_vision.append((id_blocco, block, testo))
-                    logger.log(f"Vision ID {id_blocco}: {testo[:40]}...")
+            # Estrazione per PARAGRAFO per separare stili diversi (es. Titolo in grassetto vs Sottotitolo)
+            for page in text_response.full_text_annotation.pages:
+                for block in page.blocks:
+                    for paragraph in block.paragraphs:
+                        testo = estrai_testo_da_paragrafo(paragraph)
+                        if testo:
+                            testi_vision[id_counter] = testo
+                            blocchi_vision.append((id_counter, paragraph, testo))
+                            logger.log(f"Vision ID {id_counter}: {testo[:40]}...")
+                            id_counter += 1
         
         mappatura_testi = []
         
@@ -451,7 +467,8 @@ def process_infographic_trigger(cloud_event):
             ids_da_tradurre = list(info_traduzione.keys())
             logger.log(f">>> Gemini IDs Approvati per la traduzione: {ids_da_tradurre}")
             
-            for id_blocco, block, testo_originale in blocchi_vision:
+            # Qui iteriamo sulla nuova lista di paragrafi
+            for id_blocco, paragraph, testo_originale in blocchi_vision:
                 if id_blocco not in ids_da_tradurre:
                     continue
                 
@@ -461,14 +478,13 @@ def process_infographic_trigger(cloud_event):
                 xs = []
                 ys = []
                 
-                for paragraph in block.paragraphs:
-                    for word in paragraph.words:
-                        testo_parola = "".join([s.text for s in word.symbols])
-                        
-                        if testo_parola not in scarti:
-                            for v in word.bounding_box.vertices:
-                                xs.append(v.x)
-                                ys.append(v.y)
+                for word in paragraph.words:
+                    testo_parola = "".join([s.text for s in word.symbols])
+                    
+                    if testo_parola not in scarti:
+                        for v in word.bounding_box.vertices:
+                            xs.append(v.x)
+                            ys.append(v.y)
                 
                 if xs and ys:
                     vertici = [
@@ -476,11 +492,11 @@ def process_infographic_trigger(cloud_event):
                         {"x": max(xs), "y": max(ys)}, {"x": min(xs), "y": max(ys)}
                     ]
                 else:
-                    vertici = formatta_vertici(block.bounding_box.vertices)
+                    vertici = formatta_vertici(paragraph.bounding_box.vertices)
                     
                 colore_sfondo = estrai_colore_sfondo(img_cv, vertici)
                 colore_testo = estrai_colore_testo(img_cv, vertici, colore_sfondo, logger)
-                allineamento_originale = rileva_allineamento(block)
+                allineamento_originale = rileva_allineamento(paragraph)
                 
                 is_bold = metadati["grassetto"]
                 tipo_testo = metadati["tipo"]
@@ -546,7 +562,6 @@ def process_infographic_trigger(cloud_event):
         logger.log(f"\nERRORE CRITICO: {e}")
         raise e
     finally:
-        # SALVATAGGIO FISICO DEL FILE DI DEBUG NEL BUCKET
         try:
             testo_log = logger.get_testo_completo()
             percorso_log = f"elaborato_{datetime.now().strftime('%Y-%m-%d')}/{nome_base}_debug.txt"
