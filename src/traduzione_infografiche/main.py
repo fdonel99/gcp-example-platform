@@ -46,19 +46,34 @@ def estrai_colore_sfondo(img_cv, vertici):
     try:
         xs = [v['x'] for v in vertici]
         ys = [v['y'] for v in vertici]
-        min_x = max(0, min(xs))
-        min_y = max(0, min(ys))
+        min_x, max_x = max(0, min(xs)), min(img_cv.shape[1] - 1, max(xs))
+        min_y, max_y = max(0, min(ys)), min(img_cv.shape[0] - 1, max(ys))
         
-        # Campiona un pixel 5px fuori dal testo per prendere lo sfondo
-        y_bg = max(0, min_y - 5)
-        x_bg = max(0, min_x - 5)
-        bg_color = img_cv[y_bg, x_bg]
-        return (int(bg_color[2]), int(bg_color[1]), int(bg_color[0]))
+        # Campiona i pixel lungo il perimetro, 4px fuori dal testo
+        pad = 4
+        bordi = []
+        
+        # Bordo superiore e inferiore
+        for x in range(min_x, max_x + 1, max(1, (max_x - min_x) // 10)):
+            if min_y - pad >= 0: bordi.append(img_cv[min_y - pad, x])
+            if max_y + pad < img_cv.shape[0]: bordi.append(img_cv[max_y + pad, x])
+            
+        # Bordo sinistro e destro
+        for y in range(min_y, max_y + 1, max(1, (max_y - min_y) // 10)):
+            if min_x - pad >= 0: bordi.append(img_cv[y, min_x - pad])
+            if max_x + pad < img_cv.shape[1]: bordi.append(img_cv[y, max_x + pad])
+            
+        if bordi:
+            # La mediana ignora elementi grafici di disturbo
+            bg_color = np.median(bordi, axis=0)
+            return (int(bg_color[2]), int(bg_color[1]), int(bg_color[0]))
+            
+        return (255, 255, 255)
     except Exception:
-        return (232, 106, 33) 
+        return (232, 106, 33)
 
-def estrai_colore_testo(img_cv, vertici):
-    """Usa K-Means (Machine Learning) per separare accuratamente il colore del testo dallo sfondo a colori."""
+def estrai_colore_testo(img_cv, vertici, colore_sfondo):
+    """K-Means k=3 per superare l'anti-aliasing dei font sottili."""
     try:
         xs = [v['x'] for v in vertici]
         ys = [v['y'] for v in vertici]
@@ -66,26 +81,30 @@ def estrai_colore_testo(img_cv, vertici):
         min_y, max_y = max(0, min(ys)), max(ys)
         
         crop = img_cv[min_y:max_y, min_x:max_x]
-        if crop.size == 0: return (255, 255, 255)
+        if crop.size == 0: return (50, 50, 50)
             
-        # Rimodella l'immagine in una lista di pixel RGB
         pixels = crop.reshape((-1, 3)).astype(np.float32)
-        
-        # Cerca i 2 colori dominanti (Sfondo e Testo)
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-        _, labels, centers = cv2.kmeans(pixels, 2, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
         
+        # Cerchiamo 3 colori (Sfondo, Sfumatura Bordo, Cuore del Testo)
+        _, _, centers = cv2.kmeans(pixels, 3, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
         centers = np.uint8(centers)
-        counts = np.bincount(labels.flatten())
         
-        # Il testo è quasi sempre il gruppo con meno pixel nel riquadro
-        text_cluster_idx = np.argmin(counts)
-        color = centers[text_cluster_idx]
+        # Identifica il colore più distante e opposto rispetto allo sfondo
+        bg_bgr = np.array([colore_sfondo[2], colore_sfondo[1], colore_sfondo[0]], dtype=np.float32)
+        max_dist = -1
+        best_color = centers[0]
         
-        return (int(color[2]), int(color[1]), int(color[0]))
+        for center in centers:
+            dist = np.linalg.norm(center.astype(np.float32) - bg_bgr)
+            if dist > max_dist:
+                max_dist = dist
+                best_color = center
+                
+        return (int(best_color[2]), int(best_color[1]), int(best_color[0]))
     except Exception as e:
-        print(f"Errore estrazione colore testo: {e}")
-        return (255, 255, 255)
+        print(f"Errore colore testo: {e}")
+        return (50, 50, 50)
 
 def rileva_allineamento(block):
     """Calcola geometricamente se un blocco di testo è allineato a sx, dx o centro."""
@@ -97,7 +116,6 @@ def rileva_allineamento(block):
             xs = [v.x for v in word.bounding_box.vertices]
             linea_corrente.append({"min_x": min(xs), "max_x": max(xs)})
             
-            # Controlla se c'è un'interruzione di riga dopo questa parola
             if any(hasattr(s.property, 'detected_break') and s.property.detected_break.type_ in [3, 5] for s in word.symbols):
                 linee.append(linea_corrente)
                 linea_corrente = []
@@ -105,25 +123,21 @@ def rileva_allineamento(block):
     if linea_corrente:
         linee.append(linea_corrente)
         
-    linee = [l for l in linee if l] # Filtra eventuali righe vuote
+    linee = [l for l in linee if l] 
     
-    # Se c'è una sola riga, la centratura all'interno del proprio box è l'opzione migliore
     if len(linee) <= 1:
         return "center"
         
-    # Calcola i margini di ogni riga
     left_margins = [l[0]["min_x"] for l in linee]
     center_margins = [(l[0]["min_x"] + l[-1]["max_x"]) / 2 for l in linee]
     right_margins = [l[-1]["max_x"] for l in linee]
     
-    # Calcola la varianza (quanto sono disallineati i margini)
     diff_left = max(left_margins) - min(left_margins)
     diff_center = max(center_margins) - min(center_margins)
     diff_right = max(right_margins) - min(right_margins)
     
     min_diff = min(diff_left, diff_center, diff_right)
     
-    # Se il margine sinistro varia di max 30px, è sicuramente allineato a sinistra
     if min_diff == diff_left and diff_left <= 30:
         return "left"
     elif min_diff == diff_right and diff_right <= 30:
@@ -152,8 +166,8 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
             example_image_part,
             "Regole derivate da questo esempio:\n"
             "- 'banner': Il testo principale posizionato all'interno della grande fascia colorata.\n"
-            "- 'sottotitolo': Testo informativo o promozionale secondario, scritto in modo lineare e dritto.\n"
-            "- 'da_ignorare': Testi stampati fisicamente sul prodotto. IMPORTANTE: Ignora sempre i testi all'interno di loghi, icone o badge colorati circolari. Devono essere preservati e NON tradotti.\n"
+            "- 'sottotitolo': Testo informativo o promozionale secondario.\n"
+            "- 'da_ignorare': Testi stampati fisicamente sul prodotto o dentro badge colorati.\n"
             "=== FINE ESEMPIO DI RIFERIMENTO ===\n\n"
         ])
 
@@ -162,15 +176,16 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
         target_image_part,
         "Ecco i testi estratti (ID: Testo):",
         f"{json.dumps(dizionario_testi, ensure_ascii=False)}",
-        "\nREGOLE TASSATIVE (IL MANCATO RISPETTO CAUSERÀ IL CRASH DEL SISTEMA):",
-        "1. NON OMETTERE NESSUN ID. Tutti gli ID estratti devono essere restituiti nel JSON finale, nessuno escluso.",
-        "2. INSERISCI IN 'da_ignorare' tutti i testi isolati dentro bollini o loghi (es. 'NO Chemicals'). NON tradurli e NON unirli ai testi adiacenti.",
-        "3. SCARTI (FONDAMENTALE): A volte l'OCR unisce per errore il testo di un logo con il testo normale in un unico ID (es. 'SENZA SOSTANZE Chemicals CHIMICHE'). Se succede, traduci il senso corretto (es. 'CHEMICAL-FREE') MA inserisci la parola esatta dell'intruso (es. 'Chemicals') nell'array 'scarti'. In questo modo il programma saprà non cancellare quella specifica parola dal logo visivo.",
-        "4. La chiave 'scarti' DEVE SEMPRE ESISTERE in ogni blocco tradotto (usa [] se non ci sono scarti).",
-        "5. ATTENZIONE AI TESTI SPEZZATI: Se una singola frase è divisa dall'OCR, unisci la traduzione nel primo ID e per i successivi restituisci ESPLICITAMENTE una stringa vuota \"\".",
-        "6. ATTENZIONE AL GRASSETTO: Imposta 'grassetto': true se c'è ALMENO UNA parola visibilmente in grassetto.",
-        "Restituisci SOLO un JSON valido con questa esatta struttura strutturale:",
-        "{\"banner\": [], \"sottotitolo\": [{\"id\": 0, \"grassetto\": true, \"scarti\": [], \"traduzioni\": {\"en\": \"...\"}}, {\"id\": 1, \"grassetto\": false, \"scarti\": [], \"traduzioni\": {\"en\": \"\"}}, {\"id\": 5, \"grassetto\": true, \"scarti\": [\"Chemicals\"], \"traduzioni\": {\"en\": \"...\"}}], \"da_ignorare\": [4]}"
+        "\nREGOLE TASSATIVE (IL MANCATO RISPETTO CAUSERÀ IL CRASH):",
+        "1. NON OMETTERE NESSUN ID. Ogni ID originale estratto deve esistere nel JSON finale.",
+        "2. INSERISCI IN 'da_ignorare' loghi isolati o grafiche (es. 'NO Chemicals'). NON unirli mai ad altri testi.",
+        "3. SCARTI: Se un ID contiene il testo del logo fuso per errore con quello tradotto, metti la parola intrusa nell'array 'scarti'.",
+        "4. TRADUZIONE CONTESTUALE DISTRIBUITA (FONDAMENTALE): Leggi gli ID adiacenti per comprendere il senso grammaticale completo (es. ID 1: 'EMISSIONI', ID 2: 'SONICHE'). Elabora la traduzione corretta ('VARIABLE SONIC EMISSIONS'). Infine, DISTRIBUISCI le parole tradotte nei rispettivi ID originali per mantenere l'impaginazione (es. ID 1: 'VARIABLE SONIC', ID 2: 'EMISSIONS').",
+        "5. MANTIENI I PESI VISIVI: Distribuisci le parole in base alla lunghezza e al grassetto. Se un ID originale aveva poche parole ma grandi/in grassetto, inserisci le parole chiave della traduzione in quell'ID.",
+        "6. EVITA LE STRINGHE VUOTE: Non unire le traduzioni in un solo ID lasciando gli altri vuoti (\"\"). Spalma sempre le parole della traduzione attraverso gli ID che componevano la frase originale.",
+        "7. ATTENZIONE AL GRASSETTO: Imposta 'grassetto': true se c'è ALMENO UNA parola visibilmente in grassetto in quel blocco.",
+        "Restituisci SOLO il JSON valido:",
+        "{\"banner\": [], \"sottotitolo\": [{\"id\": 0, \"grassetto\": true, \"scarti\": [], \"traduzioni\": {\"en\": \"...\"}}], \"da_ignorare\": [4]}"
     ])
     
     response = gemini_model.generate_content(
@@ -186,12 +201,10 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     
     font_path_regular = "montserrat.ttf"
     font_path_bold = "montserrat-bold.ttf"
-
     mappatura_locale = copy.deepcopy(mappatura_testi)
 
-    # ==========================================
-    # FASE 0.A: FUSIONE SPAZI VUOTI E TESTI 
-    # ==========================================
+    print(f"\n--- LOGICA SOVRASCRITTURA TESTO [{lingua.upper()}] ---")
+
     blocchi_attivi = []
     blocchi_vuoti = []
     
@@ -202,6 +215,7 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         else:
             blocchi_attivi.append(blocco)
             
+    # Fase di unione spazi vuoti mantenuta per sicurezza (anche se mitigata dal prompt distribuito)
     for vuoto in blocchi_vuoti:
         if not blocchi_attivi: continue
         
@@ -215,19 +229,11 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
             ax, ay = [v['x'] for v in attivo["vertici_blocco"]], [v['y'] for v in attivo["vertici_blocco"]]
             cx_a, cy_a = sum(ax) / len(ax), sum(ay) / len(ay)
             
-            # Calcolo tolleranza in base alle dimensioni del blocco
-            w_a = max(ax) - min(ax)
-            h_a = max(ay) - min(ay)
-            tolleranza = min(max(w_a, h_a) * 1.5, 400)
-            
+            h_a = max(1, max(ay) - min(ay))
+            tolleranza = h_a * 2.5
             dist = ((cx_v - cx_a)**2 + (cy_v - cy_a)**2)**0.5
             
-            # Controllo: Verifica se i colori di sfondo sono simili
-            bg_v = vuoto.get("colore_sfondo", (0, 0, 0))
-            bg_a = attivo.get("colore_sfondo", (0, 0, 0))
-            distanza_colore = sum((val_v - val_a)**2 for val_v, val_a in zip(bg_v, bg_a))**0.5
-            
-            if dist < min_dist and dist < tolleranza and distanza_colore < 60:
+            if dist < min_dist and dist < tolleranza:
                 min_dist = dist
                 blocco_vicino = attivo
                 
@@ -237,9 +243,7 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
             testo_orig_vuoto = str(vuoto.get("testo_originale", "")).strip()
             blocco_vicino["testo_originale"] = f"{testo_orig_vicino} {testo_orig_vuoto}".strip()
 
-    # ==========================================
-    # FASE 0.B: REVERSE-ENGINEERING DEL FONT ORIGINALE
-    # ==========================================
+    # REVERSE-ENGINEERING DEL FONT ORIGINALE
     for blocco in blocchi_attivi:
         vertici = blocco["vertici_blocco"]
         xs, ys = [v['x'] for v in vertici], [v['y'] for v in vertici]
@@ -278,10 +282,9 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
             sim_font_size -= 2
             
         blocco["tetto_massimo_font"] = int(best_font_size * 1.05)
+        print(f"ID Elaborato: Testo=['{testo_orig[:15]}...'] | Max_Font={blocco['tetto_massimo_font']} | Grassetto={is_bold} | Align={align_mode}")
 
-    # ==========================================
-    # FASE 1: TOPPE DI SFONDO
-    # ==========================================
+    # TOPPE DI SFONDO
     for blocco in mappatura_locale:
         vertici = blocco["vertici_blocco"]
         xs, ys = [v['x'] for v in vertici], [v['y'] for v in vertici]
@@ -290,9 +293,7 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         pad = 6
         draw.rectangle([min_x - pad, min_y - pad, max_x + pad, max_y + pad], fill=colore_sfondo)
 
-    # ==========================================
-    # FASE 2: SCRITTURA TESTI TRADOTTI
-    # ==========================================
+    # SCRITTURA TESTI TRADOTTI
     for blocco in mappatura_locale:
         testo = blocco.get(f"testo_tradotto_{lingua}", "")
         if not testo or str(testo).strip() == "": 
@@ -307,7 +308,6 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         
         box_width = max_x - min_x
         box_height = max_y - min_y
-        
         max_allowed_width = box_width * 1.05
         max_allowed_height = box_height * 1.2
         
@@ -352,17 +352,18 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         bbox = draw.multiline_textbbox((0, 0), testo_adattato, font=font_scelto, align=align_mode)
         final_w, final_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
         
-        # Calcola la coordinata X in base all'allineamento
+        # Calcola la X in base all'allineamento
         if align_mode == "left":
             x_pos = min_x - bbox[0]
         elif align_mode == "right":
             x_pos = max_x - final_w - bbox[0]
-        else: # center
+        else:
             x_pos = min_x + (box_width - final_w) / 2 - bbox[0]
             
         y_pos = min_y + (box_height - final_h) / 2 - bbox[1]
         
         draw.multiline_text((x_pos, y_pos), testo_adattato, fill=colore_testo, font=font_scelto, align=align_mode)
+        print(f"Stampa '{testo[:15]}...' -> Font Render Size: {font_size} | Colore (RGB): {colore_testo}")
         
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format=formato_img)
@@ -378,6 +379,8 @@ def process_infographic_trigger(cloud_event):
     if file_name.endswith("/"): return
     if not file_name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")): return
 
+    print(f"=== INIZIO ELABORAZIONE: {file_name} ===")
+
     try:
         nome_base, estensione = os.path.splitext(file_name)
         formato_img = "PNG" if estensione.lower() == ".png" else "JPEG"
@@ -391,6 +394,7 @@ def process_infographic_trigger(cloud_event):
         img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
         # 1. OCR Iniziale
+        print("Richiesta testi OCR a Google Vision...")
         gcs_uri = f"gs://{bucket_name}/{file_name}"
         image = vision.Image(source=vision.ImageSource(gcs_image_uri=gcs_uri))
         text_response = vision_client.document_text_detection(image=image)
@@ -407,11 +411,12 @@ def process_infographic_trigger(cloud_event):
                 if testo:
                     testi_vision[id_blocco] = testo
                     blocchi_vision.append((id_blocco, block, testo))
+                    print(f"Vision ID {id_blocco}: {testo[:30]}...")
         
         mappatura_testi = []
         
         # 3. Chiamata a Gemini per Classificazione E Traduzione Semantica
-        print("Interrogazione Gemini in corso...")
+        print("\nInterrogazione Traduzione Semantica in corso...")
         if testi_vision:
             classificazione_gemini = analizza_e_traduci_con_gemini(original_image_bytes, mime_type, testi_vision)
             
@@ -433,7 +438,7 @@ def process_infographic_trigger(cloud_event):
                             continue
                             
             ids_da_tradurre = list(info_traduzione.keys())
-            print(f"Gemini ha elaborato e tradotto gli ID: {ids_da_tradurre}")
+            print(f"Gemini IDs Approvati: {ids_da_tradurre}")
             
             # 4. Processamento ed Estrazione Dati solo per gli ID approvati
             for id_blocco, block, testo_originale in blocchi_vision:
@@ -467,7 +472,7 @@ def process_infographic_trigger(cloud_event):
                 # ---------------------------------------------------------
                     
                 colore_sfondo = estrai_colore_sfondo(img_cv, vertici)
-                colore_testo = estrai_colore_testo(img_cv, vertici)
+                colore_testo = estrai_colore_testo(img_cv, vertici, colore_sfondo)
                 allineamento_originale = rileva_allineamento(block)
                 
                 is_bold = metadati["grassetto"]
@@ -502,6 +507,7 @@ def process_infographic_trigger(cloud_event):
                     "tipo": tipo_testo,
                     "allineamento": allineamento_originale
                 })
+                print(f"Colore Sfondo ID {id_blocco}: {colore_sfondo} | Colore Testo: {colore_testo}")
         
         destination_bucket = storage_client.bucket(OUTPUT_BUCKET_NAME)
         current_date_str = datetime.now().strftime("%Y-%m-%d")
@@ -515,7 +521,7 @@ def process_infographic_trigger(cloud_event):
             content_type='application/json'
         )
 
-        print("Sovrascrittura nativa dei testi tradotti...")
+        print("\nSovrascrittura nativa dei testi tradotti...")
         content_type = source_blob.content_type if source_blob.content_type else f'image/{formato_img.lower()}'
         
         for lang in ["en", "fr", "de", "es", "nl"]:
@@ -528,7 +534,7 @@ def process_infographic_trigger(cloud_event):
             clean_blob = destination_bucket.blob(clean_blob_name)
             clean_blob.upload_from_string(final_image_bytes, content_type=content_type)
 
-        print("Tutto completato con successo.")
+        print("\n=== ELABORAZIONE COMPLETATA CON SUCCESSO ===")
 
     except Exception as e:
         print(f"Errore critico: {e}")
