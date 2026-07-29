@@ -43,35 +43,19 @@ def formatta_vertici(vertices):
     return [{"x": v.x, "y": v.y} for v in vertices]
 
 def estrai_colore_sfondo(img_cv, vertici):
-    """Usa K-Means per trovare il VERO colore dominante dell'area, evitando pixel esterni."""
     try:
         xs = [v['x'] for v in vertici]
         ys = [v['y'] for v in vertici]
-        min_x, max_x = max(0, min(xs)), max(xs)
-        min_y, max_y = max(0, min(ys)), max(ys)
+        min_x = max(0, min(xs))
+        min_y = max(0, min(ys))
         
-        crop = img_cv[min_y:max_y, min_x:max_x]
-        if crop.size == 0: return (232, 106, 33)
-            
-        # Rimodella l'immagine in una lista di pixel BGR
-        pixels = crop.reshape((-1, 3)).astype(np.float32)
-        
-        # Separa i colori in 2 cluster principali
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-        _, labels, centers = cv2.kmeans(pixels, 2, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
-        
-        centers = np.uint8(centers)
-        counts = np.bincount(labels.flatten())
-        
-        # A differenza del testo, lo SFONDO è il gruppo con PIÙ pixel nel riquadro
-        bg_cluster_idx = np.argmax(counts)
-        color = centers[bg_cluster_idx]
-        
-        # Ritorna RGB
-        return (int(color[2]), int(color[1]), int(color[0]))
-    except Exception as e:
-        print(f"Errore estrazione colore sfondo: {e}")
-        return (232, 106, 33)
+        # Campiona un pixel 5px fuori dal testo per prendere lo sfondo
+        y_bg = max(0, min_y - 5)
+        x_bg = max(0, min_x - 5)
+        bg_color = img_cv[y_bg, x_bg]
+        return (int(bg_color[2]), int(bg_color[1]), int(bg_color[0]))
+    except Exception:
+        return (232, 106, 33) 
 
 def estrai_colore_testo(img_cv, vertici):
     """Usa K-Means (Machine Learning) per separare accuratamente il colore del testo dallo sfondo a colori."""
