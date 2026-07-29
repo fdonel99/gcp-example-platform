@@ -108,8 +108,8 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
             example_image_part,
             "Regole derivate da questo esempio:\n"
             "- 'banner': Il testo principale posizionato all'interno della grande fascia colorata.\n"
-            "- 'sottotitolo': Testo informativo o promozionale secondario, scritto in modo lineare e dritto (es. 'NEL RISPETTO DELLA NATURA').\n"
-            "- 'da_ignorare': Testi stampati fisicamente sul prodotto (es. 'Bee it', 'SAVE THE BEES') e soprattutto i TESTI DECORATIVI SCRITTI IN CIRCOLO attorno alle icone. INOLTRE, IGNORA I TESTI ALL'INTERNO DI LOGHI, BADGE O ICONE GRAFICHE (es. la scritta 'NO Chemicals' dentro un bollino verde). IGNORARE QUESTI TESTI È FONDAMENTALE per non distruggere la grafica originale.\n"
+            "- 'sottotitolo': Testo informativo o promozionale secondario, scritto in modo lineare e dritto.\n"
+            "- 'da_ignorare': Testi stampati fisicamente sul prodotto. IMPORTANTE: Ignora sempre i testi all'interno di loghi, icone o badge colorati circolari. Devono essere preservati e NON tradotti.\n"
             "=== FINE ESEMPIO DI RIFERIMENTO ===\n\n"
         ])
 
@@ -118,8 +118,10 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
         target_image_part,
         "Ecco i testi estratti (ID: Testo):",
         f"{json.dumps(dizionario_testi, ensure_ascii=False)}",
-        "\nATTENZIONE AI TESTI SPEZZATI: Se una singola frase è stata divisa dall'OCR in più ID, unisci l'intera traduzione nel primo ID e per i successivi restituisci ESPLICITAMENTE una stringa vuota \"\".",
-        "\nATTENZIONE AL GRASSETTO: Per i testi classificati come 'banner' o 'sottotitolo', valuta se visivamente contengono parole in grassetto. Imposta 'grassetto': true se c'è ALMENO UNA parola visibilmente più spessa/in grassetto nel blocco, altrimenti false.",
+        "\nREGOLE TASSATIVE:",
+        "1. INSERISCI IN 'da_ignorare' tutti i testi dentro bollini, loghi o icone (es. 'NO Chemicals'). NON tradurli e NON unirli ai testi adiacenti.",
+        "2. ATTENZIONE AI TESTI SPEZZATI: Se una singola frase è divisa, unisci la traduzione nel primo ID e usa \"\" per i successivi. NON unire MAI un testo dentro un elemento grafico con uno fuori.",
+        "3. ATTENZIONE AL GRASSETTO: Imposta 'grassetto': true se c'è ALMENO UNA parola visibilmente in grassetto.",
         "Restituisci SOLO un JSON valido con questa struttura per le traduzioni in en, fr, de, es, nl:",
         "{\"banner\": [{\"id\": 1, \"grassetto\": true, \"traduzioni\": {\"en\": \"...\"}}], \"sottotitolo\": [{\"id\": 2, \"grassetto\": false, \"traduzioni\": {\"en\": \"...\"}}], \"da_ignorare\": [3]}"
     ])
@@ -129,8 +131,6 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
         generation_config={"response_mime_type": "application/json"}
     )
     return json.loads(response.text.strip())
-
-
 
 def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     import copy 
@@ -143,7 +143,7 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     mappatura_locale = copy.deepcopy(mappatura_testi)
 
     # ==========================================
-    # FASE 0.A: FUSIONE SPAZI VUOTI E TESTI (Fatta PRIMA del calcolo)
+    # FASE 0.A: FUSIONE SPAZI VUOTI E TESTI 
     # ==========================================
     blocchi_attivi = []
     blocchi_vuoti = []
@@ -168,24 +168,25 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
             ax, ay = [v['x'] for v in attivo["vertici_blocco"]], [v['y'] for v in attivo["vertici_blocco"]]
             cx_a, cy_a = sum(ax) / len(ax), sum(ay) / len(ay)
             
-            # Calcolo le dimensioni del blocco attivo per creare un raggio dinamico
+            # Calcolo tolleranza in base alle dimensioni del blocco
             w_a = max(ax) - min(ax)
             h_a = max(ay) - min(ay)
+            tolleranza = min(max(w_a, h_a) * 1.5, 400)
             
             dist = ((cx_v - cx_a)**2 + (cy_v - cy_a)**2)**0.5
             
-            # La tolleranza diventa 1.5 volte la dimensione maggiore del blocco attivo (max 500px)
-            # In questo modo fonde solo testi effettivamente adiacenti e coerenti
-            tolleranza = min(max(w_a, h_a) * 1.5, 500)
+            # NUOVO CONTROLLO: Verifica se i colori di sfondo sono simili (soglia 60 su 255)
+            bg_v = vuoto.get("colore_sfondo", (0, 0, 0))
+            bg_a = attivo.get("colore_sfondo", (0, 0, 0))
+            distanza_colore = sum((val_v - val_a)**2 for val_v, val_a in zip(bg_v, bg_a))**0.5
             
-            if dist < min_dist and dist < tolleranza:
+            # Fonde i blocchi SOLO se la distanza geometrica è ridotta E i colori di sfondo combaciano
+            if dist < min_dist and dist < tolleranza and distanza_colore < 60:
                 min_dist = dist
                 blocco_vicino = attivo
                 
         if blocco_vicino:
-            # Estendiamo i vertici creando il mega-riquadro
             blocco_vicino["vertici_blocco"].extend(vuoto["vertici_blocco"])
-            # Uniamo il testo originale così il reverse-engineering sarà calibrato sull'intera frase!
             testo_orig_vicino = str(blocco_vicino.get("testo_originale", "")).strip()
             testo_orig_vuoto = str(vuoto.get("testo_originale", "")).strip()
             blocco_vicino["testo_originale"] = f"{testo_orig_vicino} {testo_orig_vuoto}".strip()
@@ -193,7 +194,6 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     # ==========================================
     # FASE 0.B: REVERSE-ENGINEERING DEL FONT ORIGINALE
     # ==========================================
-    # Ora lo eseguiamo SOLO sui blocchi attivi (che ormai hanno assorbito lo spazio necessario)
     for blocco in blocchi_attivi:
         vertici = blocco["vertici_blocco"]
         xs, ys = [v['x'] for v in vertici], [v['y'] for v in vertici]
@@ -230,7 +230,6 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
                 
             sim_font_size -= 2
             
-        # Margine del 5% per accomodare lingue leggermente più ingombranti
         blocco["tetto_massimo_font"] = int(best_font_size * 1.05)
 
     # ==========================================
@@ -272,7 +271,6 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
         colore_testo = tuple(blocco.get("colore_testo", (255, 255, 255)))
         current_font_path = font_path_bold if is_bold else font_path_regular
         
-        # Uso il limite calcolato sul grande riquadro unificato!
         tetto_massimo_font = blocco.get("tetto_massimo_font", 65)
         font_size = min(65, tetto_massimo_font) 
         
@@ -314,7 +312,6 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format=formato_img)
     return img_byte_arr.getvalue()
-
 
 @functions_framework.cloud_event
 def process_infographic_trigger(cloud_event):
