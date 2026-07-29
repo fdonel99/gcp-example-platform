@@ -58,6 +58,7 @@ def estrai_colore_sfondo(img_cv, vertici):
         return (232, 106, 33) 
 
 def estrai_colore_testo(img_cv, vertici):
+    """Usa K-Means (Machine Learning) per separare accuratamente il colore del testo dallo sfondo a colori."""
     try:
         xs = [v['x'] for v in vertici]
         ys = [v['y'] for v in vertici]
@@ -67,17 +68,23 @@ def estrai_colore_testo(img_cv, vertici):
         crop = img_cv[min_y:max_y, min_x:max_x]
         if crop.size == 0: return (255, 255, 255)
             
+        # Rimodella l'immagine in una lista di pixel RGB
         pixels = crop.reshape((-1, 3)).astype(np.float32)
+        
+        # Cerca i 2 colori dominanti (Sfondo e Testo)
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
         _, labels, centers = cv2.kmeans(pixels, 2, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
         
         centers = np.uint8(centers)
         counts = np.bincount(labels.flatten())
+        
+        # Il testo è quasi sempre il gruppo con meno pixel nel riquadro
         text_cluster_idx = np.argmin(counts)
         color = centers[text_cluster_idx]
         
         return (int(color[2]), int(color[1]), int(color[0]))
     except Exception as e:
+        print(f"Errore estrazione colore testo: {e}")
         return (255, 255, 255)
 
 def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
@@ -112,11 +119,12 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
         "Ecco i testi estratti (ID: Testo):",
         f"{json.dumps(dizionario_testi, ensure_ascii=False)}",
         "\nREGOLE TASSATIVE:",
-        "1. INSERISCI IN 'da_ignorare' tutti i testi dentro bollini, loghi o icone (es. 'NO Chemicals'). NON tradurli e NON unirli ai testi adiacenti.",
-        "2. ATTENZIONE AI TESTI SPEZZATI: Se una singola frase è divisa, unisci la traduzione nel primo ID e usa \"\" per i successivi. NON unire MAI un testo dentro un elemento grafico con uno fuori.",
-        "3. ATTENZIONE AL GRASSETTO: Imposta 'grassetto': true se c'è ALMENO UNA parola visibilmente in grassetto.",
+        "1. INSERISCI IN 'da_ignorare' tutti i testi isolati dentro bollini o loghi (es. 'NO Chemicals'). NON tradurli e NON unirli ai testi adiacenti.",
+        "2. SCARTI (FONDAMENTALE): A volte l'OCR unisce per errore il testo di un logo con il testo normale in un unico ID (es. 'SENZA SOSTANZE Chemicals CHIMICHE'). Se succede, traduci il senso corretto (es. 'CHEMICAL-FREE') MA inserisci la parola esatta dell'intruso (es. 'Chemicals') nell'array 'scarti'. In questo modo il programma saprà non cancellare quella specifica parola dal logo visivo.",
+        "3. ATTENZIONE AI TESTI SPEZZATI: Se una singola frase è divisa, unisci la traduzione nel primo ID e usa \"\" per i successivi.",
+        "4. ATTENZIONE AL GRASSETTO: Imposta 'grassetto': true se c'è ALMENO UNA parola visibilmente in grassetto.",
         "Restituisci SOLO un JSON valido con questa struttura per le traduzioni in en, fr, de, es, nl:",
-        "{\"banner\": [{\"id\": 1, \"grassetto\": true, \"traduzioni\": {\"en\": \"...\"}}], \"sottotitolo\": [{\"id\": 2, \"grassetto\": false, \"traduzioni\": {\"en\": \"...\"}}], \"da_ignorare\": [3]}"
+        "{\"banner\": [{\"id\": 1, \"grassetto\": true, \"scarti\": [], \"traduzioni\": {\"en\": \"...\"}}], \"sottotitolo\": [{\"id\": 2, \"grassetto\": false, \"scarti\": [\"Intruso\"], \"traduzioni\": {\"en\": \"...\"}}], \"da_ignorare\": [3]}"
     ])
     
     response = gemini_model.generate_content(
@@ -125,7 +133,7 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
     )
     return json.loads(response.text.strip())
 
-def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, log_debug, formato_img="JPEG"):
+def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
     import copy 
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     draw = ImageDraw.Draw(img)
@@ -134,8 +142,6 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, log_debug, formato_i
     font_path_bold = "montserrat-bold.ttf"
 
     mappatura_locale = copy.deepcopy(mappatura_testi)
-
-    log_debug.append(f"\n--- INIZIO ELABORAZIONE GRAFICA LINGUA: {lingua.upper()} ---")
 
     # ==========================================
     # FASE 0.A: FUSIONE SPAZI VUOTI E TESTI 
@@ -150,16 +156,11 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, log_debug, formato_i
         else:
             blocchi_attivi.append(blocco)
             
-    log_debug.append(f"Trovati {len(blocchi_attivi)} blocchi attivi (da tradurre) e {len(blocchi_vuoti)} blocchi vuoti (tradotti con stringa vuota).")
-
     for vuoto in blocchi_vuoti:
         if not blocchi_attivi: continue
         
         vx, vy = [v['x'] for v in vuoto["vertici_blocco"]], [v['y'] for v in vuoto["vertici_blocco"]]
         cx_v, cy_v = sum(vx) / len(vx), sum(vy) / len(vy)
-        
-        testo_orig_vuoto = str(vuoto.get("testo_originale", "")).strip()
-        log_debug.append(f"\n[FASE 0.A] Analizzo blocco vuoto derivante dal testo originale: '{testo_orig_vuoto}'")
         
         blocco_vicino = None
         min_dist = float('inf')
@@ -168,21 +169,28 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, log_debug, formato_i
             ax, ay = [v['x'] for v in attivo["vertici_blocco"]], [v['y'] for v in attivo["vertici_blocco"]]
             cx_a, cy_a = sum(ax) / len(ax), sum(ay) / len(ay)
             
+            # Calcolo tolleranza in base alle dimensioni del blocco
+            w_a = max(ax) - min(ax)
+            h_a = max(ay) - min(ay)
+            tolleranza = min(max(w_a, h_a) * 1.5, 400)
+            
             dist = ((cx_v - cx_a)**2 + (cy_v - cy_a)**2)**0.5
             
-            if dist < min_dist and dist < 2000:
+            # NUOVO CONTROLLO: Verifica se i colori di sfondo sono simili (soglia 60 su 255)
+            bg_v = vuoto.get("colore_sfondo", (0, 0, 0))
+            bg_a = attivo.get("colore_sfondo", (0, 0, 0))
+            distanza_colore = sum((val_v - val_a)**2 for val_v, val_a in zip(bg_v, bg_a))**0.5
+            
+            # Fonde i blocchi SOLO se la distanza geometrica è ridotta E i colori di sfondo combaciano
+            if dist < min_dist and dist < tolleranza and distanza_colore < 60:
                 min_dist = dist
                 blocco_vicino = attivo
                 
         if blocco_vicino:
-            testo_orig_vicino = str(blocco_vicino.get("testo_originale", "")).strip()
-            log_debug.append(f"  --> FUSIONE ESEGUITA! Il blocco '{testo_orig_vuoto}' è stato unito a '{testo_orig_vicino}'.")
-            log_debug.append(f"  --> Distanza geometrica rilevata: {min_dist:.2f}px.")
-            
             blocco_vicino["vertici_blocco"].extend(vuoto["vertici_blocco"])
+            testo_orig_vicino = str(blocco_vicino.get("testo_originale", "")).strip()
+            testo_orig_vuoto = str(vuoto.get("testo_originale", "")).strip()
             blocco_vicino["testo_originale"] = f"{testo_orig_vicino} {testo_orig_vuoto}".strip()
-        else:
-            log_debug.append(f"  --> NESSUNA FUSIONE. Nessun testo attivo entro 2000px.")
 
     # ==========================================
     # FASE 0.B: REVERSE-ENGINEERING DEL FONT ORIGINALE
@@ -306,6 +314,7 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, log_debug, formato_i
     img.save(img_byte_arr, format=formato_img)
     return img_byte_arr.getvalue()
 
+
 @functions_framework.cloud_event
 def process_infographic_trigger(cloud_event):
     data = cloud_event.data
@@ -314,11 +323,6 @@ def process_infographic_trigger(cloud_event):
 
     if file_name.endswith("/"): return
     if not file_name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")): return
-
-    # Inizializzo il contenitore dei log
-    log_debug = []
-    log_debug.append(f"=== DEBUG LOG INFOGRAFICA: {file_name} ===")
-    log_debug.append(f"Data esecuzione: {datetime.now()}")
 
     try:
         nome_base, estensione = os.path.splitext(file_name)
@@ -343,26 +347,21 @@ def process_infographic_trigger(cloud_event):
         # 2. Estrazione Testi con ID numerico
         testi_vision = {}
         blocchi_vision = []
-        log_debug.append("\n=== 1. OCR: TESTI INDIVIDUATI DA VISION ===")
         if text_response.full_text_annotation:
             for id_blocco, block in enumerate(text_response.full_text_annotation.pages[0].blocks):
                 testo = estrai_testo_da_blocco(block)
                 if testo:
                     testi_vision[id_blocco] = testo
                     blocchi_vision.append((id_blocco, block, testo))
-                    log_debug.append(f"ID {id_blocco}: '{testo}'")
         
         mappatura_testi = []
         
         # 3. Chiamata a Gemini per Classificazione E Traduzione Semantica
-        log_debug.append("\n=== 2. GEMINI: RISPOSTA GREZZA ===")
         print("Interrogazione Gemini in corso...")
         if testi_vision:
             classificazione_gemini = analizza_e_traduci_con_gemini(original_image_bytes, mime_type, testi_vision)
             
-            # Scrivo la risposta JSON di Gemini nel log
-            log_debug.append(json.dumps(classificazione_gemini, indent=2, ensure_ascii=False))
-            
+            # Gestione sicura del JSON esteso
             info_traduzione = {}
             for cat in ["banner", "sottotitolo"]:
                 lista_raw = classificazione_gemini.get(cat, [])
@@ -373,6 +372,7 @@ def process_infographic_trigger(cloud_event):
                             info_traduzione[id_pulito] = {
                                 "tipo": cat, 
                                 "grassetto": item.get("grassetto", False),
+                                "scarti": item.get("scarti", []),
                                 "traduzioni": item.get("traduzioni", {})
                             }
                         except ValueError:
@@ -380,21 +380,41 @@ def process_infographic_trigger(cloud_event):
                             
             ids_da_tradurre = list(info_traduzione.keys())
             print(f"Gemini ha elaborato e tradotto gli ID: {ids_da_tradurre}")
-            log_debug.append(f"\nLista finale degli ID da tradurre secondo Gemini: {ids_da_tradurre}")
             
             # 4. Processamento ed Estrazione Dati solo per gli ID approvati
-            log_debug.append("\n=== 3. COLORI ESTRATTI PER I BLOCCHI ===")
             for id_blocco, block, testo_originale in blocchi_vision:
                 if id_blocco not in ids_da_tradurre:
                     continue
+                
+                metadati = info_traduzione[id_blocco]
+                scarti = metadati.get("scarti", [])
+                
+                # --- NUOVA LOGICA: COSTRUZIONE BOUNDING BOX CHIRURGICA ---
+                xs = []
+                ys = []
+                
+                for paragraph in block.paragraphs:
+                    for word in paragraph.words:
+                        testo_parola = "".join([s.text for s in word.symbols])
+                        
+                        # Escludiamo le coordinate se la parola è negli scarti di Gemini
+                        if testo_parola not in scarti:
+                            for v in word.bounding_box.vertices:
+                                xs.append(v.x)
+                                ys.append(v.y)
+                
+                if xs and ys:
+                    vertici = [
+                        {"x": min(xs), "y": min(ys)}, {"x": max(xs), "y": min(ys)},
+                        {"x": max(xs), "y": max(ys)}, {"x": min(xs), "y": max(ys)}
+                    ]
+                else:
+                    vertici = formatta_vertici(block.bounding_box.vertices)
+                # ---------------------------------------------------------
                     
-                vertici = formatta_vertici(block.bounding_box.vertices)
                 colore_sfondo = estrai_colore_sfondo(img_cv, vertici)
                 colore_testo = estrai_colore_testo(img_cv, vertici)
                 
-                log_debug.append(f"ID {id_blocco} ('{testo_originale}') -> Colore Sfondo: {colore_sfondo}, Colore Testo: {colore_testo}")
-
-                metadati = info_traduzione[id_blocco]
                 is_bold = metadati["grassetto"]
                 tipo_testo = metadati["tipo"]
                 traduzioni_gemini = metadati["traduzioni"]
@@ -444,8 +464,7 @@ def process_infographic_trigger(cloud_event):
         
         for lang in ["en", "fr", "de", "es", "nl"]:
             if mappatura_testi:
-                # PASSO LA LISTA log_debug ALLA FUNZIONE PER TRACCIARE LA FASE 0.A
-                final_image_bytes = sovrascrivi_testo(original_image_bytes, mappatura_testi, lang, log_debug, formato_img)
+                final_image_bytes = sovrascrivi_testo(original_image_bytes, mappatura_testi, lang, formato_img)
             else:
                 final_image_bytes = original_image_bytes
                 
@@ -456,17 +475,5 @@ def process_infographic_trigger(cloud_event):
         print("Tutto completato con successo.")
 
     except Exception as e:
-        log_debug.append(f"\nERRORE CRITICO ESECUZIONE: {str(e)}")
         print(f"Errore critico: {e}")
         raise e
-    
-    finally:
-        # Questo blocco viene eseguito SEMPRE alla fine, sia in caso di successo che di crash.
-        # Salva il file log nel bucket di output.
-        try:
-            debug_blob_name = f"elaborato_{current_date_str}/{nome_base}_debug.txt"
-            debug_blob = destination_bucket.blob(debug_blob_name)
-            debug_blob.upload_from_string("\n".join(log_debug), content_type='text/plain')
-            print(f"Log di debug salvato correttamente come: {debug_blob_name}")
-        except Exception as log_error:
-            print(f"Impossibile salvare il file di log: {log_error}")
