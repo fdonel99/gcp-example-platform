@@ -117,3 +117,11 @@ resource "google_storage_bucket" "bucket_codice_funzioni" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
 }
+
+resource "google_storage_bucket" "bucket_listino_costi_trasporto" {
+  name                        = "bkt-listino-costi-trasporto"
+  location                    = "EU"
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+}

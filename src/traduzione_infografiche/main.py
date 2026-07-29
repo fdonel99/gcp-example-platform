@@ -109,7 +109,7 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
             "Regole derivate da questo esempio:\n"
             "- 'banner': Il testo principale posizionato all'interno della grande fascia colorata.\n"
             "- 'sottotitolo': Testo informativo o promozionale secondario, scritto in modo lineare e dritto (es. 'NEL RISPETTO DELLA NATURA').\n"
-            "- 'da_ignorare': Testi stampati fisicamente sul prodotto (es. 'Bee it', 'SAVE THE BEES') e soprattutto i TESTI DECORATIVI SCRITTI IN CIRCOLO attorno alle icone (es. 'DERMATOLOGICAMENTE TESTATO', 'ANIMAL FRIENDLY', 'SENZA PARABENI', ecc.). IGNORARE QUESTI TESTI CIRCOLARI È FONDAMENTALE.\n"
+            "- 'da_ignorare': Testi stampati fisicamente sul prodotto (es. 'Bee it', 'SAVE THE BEES') e soprattutto i TESTI DECORATIVI SCRITTI IN CIRCOLO attorno alle icone. INOLTRE, IGNORA I TESTI ALL'INTERNO DI LOGHI, BADGE O ICONE GRAFICHE (es. la scritta 'NO Chemicals' dentro un bollino verde). IGNORARE QUESTI TESTI È FONDAMENTALE per non distruggere la grafica originale.\n"
             "=== FINE ESEMPIO DI RIFERIMENTO ===\n\n"
         ])
 
@@ -168,9 +168,17 @@ def sovrascrivi_testo(image_bytes, mappatura_testi, lingua, formato_img="JPEG"):
             ax, ay = [v['x'] for v in attivo["vertici_blocco"]], [v['y'] for v in attivo["vertici_blocco"]]
             cx_a, cy_a = sum(ax) / len(ax), sum(ay) / len(ay)
             
+            # Calcolo le dimensioni del blocco attivo per creare un raggio dinamico
+            w_a = max(ax) - min(ax)
+            h_a = max(ay) - min(ay)
+            
             dist = ((cx_v - cx_a)**2 + (cy_v - cy_a)**2)**0.5
-            # Raggio aumentato a 2000px per supportare infografiche in alta risoluzione
-            if dist < min_dist and dist < 2000:
+            
+            # La tolleranza diventa 1.5 volte la dimensione maggiore del blocco attivo (max 500px)
+            # In questo modo fonde solo testi effettivamente adiacenti e coerenti
+            tolleranza = min(max(w_a, h_a) * 1.5, 500)
+            
+            if dist < min_dist and dist < tolleranza:
                 min_dist = dist
                 blocco_vicino = attivo
                 
