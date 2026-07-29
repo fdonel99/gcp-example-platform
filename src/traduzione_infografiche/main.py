@@ -180,7 +180,7 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi, logg
         "   - NON FARE l'errore di mettere 'VARIABLE SONIC' nell'ID 0 e 'EMISSIONS' nell'ID 1. Distruggeresti le dimensioni dei font!",
         "5. ATTENZIONE AL GRASSETTO: Imposta 'grassetto': true se c'è ALMENO UNA parola visibilmente in grassetto in quel frammento.",
         "Restituisci SOLO un JSON valido strutturato così:",
-        "{\\"banner\\": [], \\"sottotitolo\\": [{\\"id\\": 0, \\"grassetto\\": true, \\"scarti\\": [], \\"traduzioni\\": {\\"en\\": \\"...\\", \\"fr\\": \\"...\\", \\"de\\": \\"...\\", \\"es\\": \\"...\\", \\"nl\\": \\"...\\"}}], \\"da_ignorare\\": [4]}"
+        '{"banner": [], "sottotitolo": [{"id": 0, "grassetto": true, "scarti": [], "traduzioni": {"en": "...", "fr": "...", "de": "...", "es": "...", "nl": "..."}}], "da_ignorare": [4]}'
     ]
     
     logger.log("Invio richiesta a Gemini 2.5 Flash...")
