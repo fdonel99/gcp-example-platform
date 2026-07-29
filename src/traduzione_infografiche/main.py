@@ -108,8 +108,8 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
             example_image_part,
             "Regole derivate da questo esempio:\n"
             "- 'banner': Il testo principale posizionato all'interno della grande fascia colorata.\n"
-            "- 'sottotitolo': Testo informativo o promozionale secondario, scritto in modo lineare e dritto.\n"
-            "- 'da_ignorare': Testi stampati fisicamente sul prodotto. IMPORTANTE: Ignora sempre i testi all'interno di loghi, icone o badge colorati circolari. Devono essere preservati e NON tradotti.\n"
+            "- 'sottotitolo': Testo informativo o promozionale secondario.\n"
+            "- 'da_ignorare': Testi stampati fisicamente sul prodotto o dentro badge circolari colorati.\n"
             "=== FINE ESEMPIO DI RIFERIMENTO ===\n\n"
         ])
 
@@ -118,13 +118,14 @@ def analizza_e_traduci_con_gemini(image_bytes, mime_type, dizionario_testi):
         target_image_part,
         "Ecco i testi estratti (ID: Testo):",
         f"{json.dumps(dizionario_testi, ensure_ascii=False)}",
-        "\nREGOLE TASSATIVE:",
-        "1. INSERISCI IN 'da_ignorare' tutti i testi isolati dentro bollini o loghi (es. 'NO Chemicals'). NON tradurli e NON unirli ai testi adiacenti.",
-        "2. SCARTI (FONDAMENTALE): A volte l'OCR unisce per errore il testo di un logo con il testo normale in un unico ID (es. 'SENZA SOSTANZE Chemicals CHIMICHE'). Se succede, traduci il senso corretto (es. 'CHEMICAL-FREE') MA inserisci la parola esatta dell'intruso (es. 'Chemicals') nell'array 'scarti'. In questo modo il programma saprà non cancellare quella specifica parola dal logo visivo.",
-        "3. ATTENZIONE AI TESTI SPEZZATI: Se una singola frase è divisa, unisci la traduzione nel primo ID e usa \"\" per i successivi.",
-        "4. ATTENZIONE AL GRASSETTO: Imposta 'grassetto': true se c'è ALMENO UNA parola visibilmente in grassetto.",
-        "Restituisci SOLO un JSON valido con questa struttura per le traduzioni in en, fr, de, es, nl:",
-        "{\"banner\": [{\"id\": 1, \"grassetto\": true, \"scarti\": [], \"traduzioni\": {\"en\": \"...\"}}], \"sottotitolo\": [{\"id\": 2, \"grassetto\": false, \"scarti\": [\"Intruso\"], \"traduzioni\": {\"en\": \"...\"}}], \"da_ignorare\": [3]}"
+        "\nREGOLE TASSATIVE (IL MANCATO RISPETTO CAUSERÀ IL CRASH DEL SISTEMA):",
+        "1. NON OMETTERE NESSUN ID. Tutti gli ID estratti devono essere restituiti nel JSON finale, nessuno escluso.",
+        "2. TESTI SPEZZATI: Se l'OCR ha diviso una singola frase (es. ID 0 e ID 1), unisci la traduzione nel primo ID. Per l'ID successivo (es. ID 1) DEVI OBBLIGATORIAMENTE restituirlo nel JSON impostando le stringhe a vuoto (es. \"en\": \"\").",
+        "3. SCARTI (FONDAMENTALE): Cerca parole straniere o intrusi che l'OCR ha fuso nel testo italiano (es. la parola 'Chemicals' fusa in 'SENZA SOSTANZE Chemicals CHIMICHE'). Inserisci ESATTAMENTE quella parola nell'array 'scarti'.",
+        "4. La chiave 'scarti' DEVE SEMPRE ESISTERE in ogni blocco tradotto (usa [] se non ci sono scarti).",
+        "5. ATTENZIONE AL GRASSETTO: Imposta 'grassetto': true se c'è ALMENO UNA parola visibilmente in grassetto.",
+        "Restituisci SOLO un JSON valido con questa esatta struttura strutturale:",
+        "{\"banner\": [], \"sottotitolo\": [{\"id\": 0, \"grassetto\": true, \"scarti\": [], \"traduzioni\": {\"en\": \"...\"}}, {\"id\": 1, \"grassetto\": false, \"scarti\": [], \"traduzioni\": {\"en\": \"\"}}, {\"id\": 5, \"grassetto\": true, \"scarti\": [\"Chemicals\"], \"traduzioni\": {\"en\": \"...\"}}], \"da_ignorare\": [4]}"
     ])
     
     response = gemini_model.generate_content(
