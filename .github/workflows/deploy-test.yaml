@@ -1,0 +1,39 @@
+name: "Terraform CI/CD - Test"
+
+on:
+  push:
+    branches:
+      - test 
+
+jobs:
+  terraform:
+    name: "Terraform Deploy Test"
+    runs-on: ubuntu-latest
+    
+    # Lavoriamo nella cartella di test
+    defaults:
+      run:
+        working-directory: environments/test
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Autenticazione GCP (Test)
+        uses: google-github-actions/auth@v2
+        with:
+          # TRUCCO: Usa un segreto diverso se l'ambiente di test è su un account GCP separato!
+          # Seusi lo stesso account GCP per Prod e Test, puoi lasciare secrets.GCP_CREDENTIALS
+          credentials_json: '${{ secrets.GCP_CREDENTIALS_TEST }}'
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve

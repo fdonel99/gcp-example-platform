@@ -1,4 +1,14 @@
-.terraform/
+# Ignora le directory di inizializzazione ovunque si trovino
+**/.terraform/
+
+# Ignora i file di stato (sicurezza extra, anche se usi GCS)
 *.tfstate
 *.tfstate.*
 crash.log
+
+# Ignora i file ZIP generati dalle Cloud Function prima dell'upload
+**/*.zip
+
+# Ignora file di sistema operativo
+.DS_Store
+Thumbs.db

@@ -1,0 +1,38 @@
+name: "Terraform CI/CD - Produzione"
+
+on:
+  push:
+    branches:
+      - main 
+
+jobs:
+  terraform:
+    name: "Terraform Deploy Prod"
+    runs-on: ubuntu-latest
+    
+    # NOVITÀ: Diciamo alla pipeline di eseguire i comandi in questa cartella!
+    defaults:
+      run:
+        working-directory: environments/prod
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Autenticazione GCP (Prod)
+        uses: google-github-actions/auth@v2
+        with:
+          # Assicurati che questo segreto abbia i permessi sul progetto di Produzione
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
