@@ -7,7 +7,7 @@ locals {
 
 resource "google_storage_bucket" "anagrafica_prodotti" {
   project                     = var.project_id
-  name                        = "bkt-anagrafica-prodotti-${var.project_id}"
+  name                        = var.environment == "prod" ? "bkt-anagrafica-prodotti" : "bkt-anagrafica-prodotti-${var.project_id}"
   location                    = "EU"
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true
@@ -17,7 +17,7 @@ resource "google_storage_bucket" "anagrafica_prodotti" {
 
 resource "google_storage_bucket" "export_ns_zip" {
   project                     = var.project_id
-  name                        = "bkt-export-ns-zip-${var.project_id}"
+  name                        = var.environment == "prod" ? "bkt-export-ns-zip" : "bkt-export-ns-zip-${var.project_id}"
   location                    = "EU"
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true
@@ -38,7 +38,7 @@ resource "google_storage_bucket" "export_ns_zip" {
 
 resource "google_storage_bucket" "report_fornitori" {
   project                     = var.project_id
-  name                        = "bkt-report-fornitori-${var.project_id}"
+  name                        = var.environment == "prod" ? "bkt-report-fornitori" : "bkt-report-fornitori-${var.project_id}"
   location                    = "EU"
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true
@@ -48,7 +48,7 @@ resource "google_storage_bucket" "report_fornitori" {
 
 resource "google_storage_bucket" "spese_trasporto" {
   project                     = var.project_id
-  name                        = "bkt-spese-trasporto-${var.project_id}"
+  name                        = var.environment == "prod" ? "bkt-spese-trasporto" : "bkt-spese-trasporto-${var.project_id}"
   location                    = "EU"
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true
@@ -67,7 +67,7 @@ resource "google_storage_bucket" "spese_trasporto" {
 
 resource "google_storage_bucket" "infografica_input" {
   project                     = var.project_id
-  name                        = "bkt-infografica-input-${var.project_id}"
+  name                        = var.environment == "prod" ? "bkt-infografica-input" : "bkt-infografica-input-${var.project_id}"
   location                    = "EU"
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true
@@ -85,7 +85,7 @@ resource "google_storage_bucket" "infografica_input" {
 
 resource "google_storage_bucket" "infografica_output" {
   project                     = var.project_id
-  name                        = "bkt-infografica-output-${var.project_id}"
+  name                        = var.environment == "prod" ? "bkt-infografica-output" : "bkt-infografica-output-${var.project_id}"
   location                    = "EU"
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true
@@ -103,7 +103,7 @@ resource "google_storage_bucket" "infografica_output" {
 
 resource "google_storage_bucket" "tf_state" {
   project                     = var.project_id
-  name                        = "bkt-tf-state-for-transition-${var.project_id}"
+  name                        = var.environment == "prod" ? "bkt-tf-state-for-transition" : "bkt-tf-state-for-transition-${var.project_id}"
   location                    = "EU"
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true
@@ -132,7 +132,7 @@ resource "google_storage_bucket_object" "file_statici_spese" {
 
 resource "google_storage_bucket" "bucket_codice_funzioni" {
   project                     = var.project_id
-  name                        = "bkt-functions-code-${var.project_id}"
+  name                        = var.environment == "prod" ? "bkt-functions-code" : "bkt-functions-code-${var.project_id}"
   location                    = "EU"
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true
@@ -142,7 +142,7 @@ resource "google_storage_bucket" "bucket_codice_funzioni" {
 
 resource "google_storage_bucket" "bucket_listino_costi_trasporto" {
   project                     = var.project_id
-  name                        = "bkt-listino-costi-trasporto-${var.project_id}"
+  name                        = var.environment == "prod" ? "bkt-listino-costi-trasporto" : "bkt-listino-costi-trasporto-${var.project_id}"
   location                    = "EU"
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true

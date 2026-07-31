@@ -6,7 +6,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.0"
+      version = ">= 5.0" 
     }
   }
 }
@@ -19,9 +19,10 @@ provider "google" {
 # =======================================================
 # 1. SETUP: API e Service Account
 # =======================================================
-module "setup_progetto" {
-  source     = "../../modules/setup_progetto"
+module "setup" {
+  source     = "../../modules/setup"
   project_id = var.project_id
+  environment = var.environment
 }
 
 # =======================================================
@@ -43,7 +44,7 @@ module "compute_functions" {
   environment                    = var.environment
   
   # Variabili passate dagli ALTRI moduli:
-  cloud_worker_sa_email          = module.setup_progetto.cloud_worker_sa_email
+  cloud_worker_sa_email          = module.setup.cloud_worker_sa_email
   bucket_codice_funzioni_name    = module.data_storage.bucket_codice_funzioni_name
   bucket_export_ns_zip_name      = module.data_storage.bucket_export_ns_zip_name
   bucket_spese_trasporto_name    = module.data_storage.bucket_spese_trasporto_name
@@ -61,7 +62,7 @@ module "orchestration" {
   environment                     = var.environment
   
   # Variabili passate dagli ALTRI moduli:
-  cloud_worker_sa_email           = module.setup_progetto.cloud_worker_sa_email
+  cloud_worker_sa_email           = module.setup.cloud_worker_sa_email
   bucket_anagrafica_prodotti_name = module.data_storage.bucket_anagrafica_prodotti_name
   bucket_report_fornitori_name    = module.data_storage.bucket_report_fornitori_name
   bucket_export_ns_zip_name       = module.data_storage.bucket_export_ns_zip_name

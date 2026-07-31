@@ -32,10 +32,3 @@ output "bucket_infografica_input_name" {
 output "bucket_infografica_output_name" {
   value = google_storage_bucket.infografica_output.name
 }
-
-output "function_drive_to_gcp_uri" {
-  value = google_cloudfunctions2_function.function_drive_to_gcp.service_config[0].uri
-}
-output "function_tables_loading_uri" {
-  value = google_cloudfunctions2_function.function_tables_loading.service_config[0].uri
-}

@@ -6,22 +6,18 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.0"
+      version = ">= 5.0" 
     }
   }
-}
-
-provider "google" {
-  project = var.project_id
-  region  = var.region
 }
 
 # =======================================================
 # 1. SETUP: API e Service Account
 # =======================================================
 module "setup_progetto" {
-  source     = "../../modules/setup_progetto"
+  source     = "../../modules/setup"
   project_id = var.project_id
+  environment = var.environment
 }
 
 # =======================================================
