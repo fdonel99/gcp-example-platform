@@ -1,11 +1,10 @@
 import functions_framework
 import os
 import json
-import io
-import re 
+import re
 import pandas as pd
 from google.cloud import storage
-from pypdf import PdfReader, PdfWriter
+import fitz  # PyMuPDF: lo usiamo per trasformare in immagine
 import vertexai
 from vertexai.generative_models import GenerativeModel, Part, GenerationConfig
 from pydantic import BaseModel
@@ -15,7 +14,8 @@ from typing import List, Optional
 storage_client = storage.Client()
 DESTINATION_BUCKET_NAME = os.environ.get('DESTINATION_BUCKET')
 PROJECT_ID = os.environ.get('PROJECT_ID')
-LOCATION = os.environ.get('LOCATION', 'europe-west4')
+
+# Forziamo l'hub europeo di Vertex AI per usare sempre i modelli più recenti (Gemini 2.5)
 VERTEX_LOCATION = 'europe-west4' 
 vertexai.init(project=PROJECT_ID, location=VERTEX_LOCATION)
 
@@ -52,45 +52,45 @@ class RigaFrSpB(BaseModel):
 class TabellaFrSpB(BaseModel): righe: List[RigaFrSpB]
 
 # =====================================================================
-# 2. LOGICA ESTRAZIONE CON GEMINI 2.5 PRO E PULIZIA PANDAS
+# 2. LOGICA ESTRAZIONE CON GEMINI 2.5 PRO (Solo Immagine OCR) E PULIZIA PANDAS
 # =====================================================================
 
 def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
-    """Ritaglia la singola pagina e usa Gemini nativo per i PDF."""
+    """Converte la pagina in immagine per distruggere il testo nascosto e forzare l'OCR."""
     
-    # Ritaglia solo la pagina specifica dal PDF
-    reader = PdfReader(io.BytesIO(pdf_bytes))
-    writer = PdfWriter()
-    writer.add_page(reader.pages[numero_pagina - 1])
+    # Apri il PDF dai bytes in memoria
+    pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     
-    single_page_stream = io.BytesIO()
-    writer.write(single_page_stream)
-    single_page_stream.seek(0)
+    # Carica la pagina e convertila in immagine a 300 DPI (alta risoluzione per leggere i numeri piccoli)
+    page = pdf_doc.load_page(numero_pagina - 1)
+    pix = page.get_pixmap(dpi=300)
+    image_bytes = pix.tobytes("png")
+    pdf_doc.close()
     
-    # Invia il PDF nativamente a Gemini
-    pdf_part = Part.from_data(data=single_page_stream.read(), mime_type="application/pdf")
+    # Passiamo a Gemini SOLO L'IMMAGINE, così non può farsi fregare dal testo nascosto del PDF
+    image_part = Part.from_data(data=image_bytes, mime_type="image/png")
     
     schema_json = json.dumps(pydantic_schema.model_json_schema(), indent=2)
     
     prompt = f"""
-    Sei un estrattore dati specializzato in logistica. Leggi la tabella tariffaria presente in questo documento PDF.
+    Sei un estrattore dati specializzato in logistica. Leggi la tabella tariffaria presente in questa immagine.
     Estrai i dati e popolali esattamente secondo questo schema JSON:
     
     {schema_json}
     
     REGOLE RIGOROSE:
-    1. ATTENZIONE AL TESTO NASCOSTO (CRITICO): Il livello di testo di questo PDF è corrotto. Sotto i numeri visibili sono rimaste incastrate vecchie tariffe invisibili (es. 2.50, 2.51 nella colonna SE_SEK). DEVI IGNORARE il testo nascosto. Usa ESCLUSIVAMENTE la tua visione ottica per leggere i numeri stampati visibilmente sulla pagina (es. 60.01, 60.11, 64.08).
-    2. Non unire mai due o più numeri nello stesso campo. Ogni colonna ha il suo valore separato.
-    3. Se vedi un incremento tariffario (es. '+0,18/kg' o '+0,05 per/+100g'), mettilo nei campi 'incremento_', inserendo SOLO il numero '0.18'.
-    4. Rimuovi lettere, simboli '+', '/', 'kg', 'g', e valute.
-    5. Converti le virgole in punti decimali ('2,50' -> 2.50).
+    1. ATTENZIONE: Leggi attentamente i numeri dall'immagine. Alcune colonne sono molto vicine, assicurati di assegnare il numero corretto alla colonna corretta.
+    2. Se vedi un incremento tariffario (es. '+0,18/kg' o '+0,05 per/+100g'), mettilo nei campi 'incremento_', inserendo SOLO il numero '0.18'.
+    3. Rimuovi lettere, simboli '+', '/', 'kg', 'g', e valute.
+    4. Converti le virgole in punti decimali ('2,50' -> 2.50).
+    5. Cerca di associare le fasce incrementali alle fasce di peso base corrispondenti per restituire un record omogeneo.
     6. Se un dato non è applicabile o manca, restituisci null.
     """
     
     model = GenerativeModel("gemini-2.5-pro")
     
     response = model.generate_content(
-        [pdf_part, prompt],
+        [image_part, prompt],
         generation_config=GenerationConfig(
             response_mime_type="application/json", 
             temperature=0.0 
@@ -105,7 +105,6 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
     def pulisci_dimensioni(val):
         if pd.isna(val) or val is None:
             return val
-        # Divide alla prima occorrenza di ":" e prende il primo pezzo rimuovendo gli spazi extra
         return str(val).split(':')[0].strip()
 
     def pulisci_peso(val):
@@ -114,25 +113,17 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
         
         testo = str(val).lower()
         is_kg = 'kg' in testo
-        
-        # Sostituisce eventuali virgole con il punto decimale
         testo = testo.replace(',', '.')
         
-        # Estrae i numeri, inclusi eventuali decimali (es. da "≤ 3.90 kg" estrae "3.90")
         match = re.search(r'(\d+\.?\d*)', testo)
         if match:
             numero = float(match.group(1))
-            
-            # Se la stringa originale conteneva "kg", moltiplica per 1000
             if is_kg:
                 numero = numero * 1000
-                
-            # Restituisce il numero come stringa intera (es: 3900 invece di 3900.0)
             return str(int(numero))
         
-        return str(val) # Fallback in caso di valore inaspettato senza numeri
+        return str(val)
     
-    # Applica le funzioni di pulizia alle colonne
     if 'dimensioni' in df.columns:
         df['dimensioni'] = df['dimensioni'].apply(pulisci_dimensioni)
         
