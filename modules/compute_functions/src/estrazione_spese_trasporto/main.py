@@ -15,9 +15,8 @@ storage_client = storage.Client()
 DESTINATION_BUCKET_NAME = os.environ.get('DESTINATION_BUCKET')
 PROJECT_ID = os.environ.get('PROJECT_ID')
 LOCATION = os.environ.get('LOCATION', 'europe-west4')
-
-# Inizializzazione Vertex AI
-vertexai.init(project=PROJECT_ID, location=LOCATION)
+VERTEX_LOCATION = 'europe-west4' 
+vertexai.init(project=PROJECT_ID, location=VERTEX_LOCATION)
 
 # =====================================================================
 # 1. DEFINIZIONE DEGLI SCHEMI PYDANTIC (Struttura esatta dei 4 CSV)
@@ -52,7 +51,7 @@ class RigaFrSpB(BaseModel):
 class TabellaFrSpB(BaseModel): righe: List[RigaFrSpB]
 
 # =====================================================================
-# 2. LOGICA ESTRAZIONE CON GEMINI 1.5 PRO (Nativo PDF + Schema in Prompt)
+# 2. LOGICA ESTRAZIONE CON GEMINI 2.5 PRO (Nativo PDF + Schema in Prompt)
 # =====================================================================
 
 def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
@@ -87,7 +86,7 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
     5. Se un dato non è applicabile o manca, restituisci null.
     """
     
-    model = GenerativeModel("gemini-1.5-pro")
+    model = GenerativeModel("gemini-2.5-pro")
     
     response = model.generate_content(
         [pdf_part, prompt],
