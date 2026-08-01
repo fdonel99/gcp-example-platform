@@ -1,6 +1,6 @@
 functions-framework==3.*
-google-cloud-storage==2.*
-vertexai==1.*
-pymupdf==1.*
-pandas==2.*
-pydantic==2.*
+google-cloud-storage>=2.10.0
+google-cloud-aiplatform>=1.43.0
+pydantic>=2.5.0
+pandas>=2.0.0
+pypdf>=4.0.0

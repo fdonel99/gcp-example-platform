@@ -19,7 +19,7 @@ resource "google_cloudfunctions2_function" "function_calcolo_spese_trasporto" {
   
   build_config {
     runtime     = "python311"
-    entry_point = "elabora_spese_trasporto"      
+    entry_point = "calcola_spese_trasporto"      
     
     source {
       storage_source {

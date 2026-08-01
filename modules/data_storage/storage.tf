@@ -121,7 +121,6 @@ resource "google_storage_bucket" "tf_state" {
       type = "Delete"
     }
     condition {
-      # Se è test cancella dopo 7 giorni, altrimenti (prod) cancella dopo 90 giorni
       days_since_noncurrent_time = local.is_test ? 7 : 90
     }
   }

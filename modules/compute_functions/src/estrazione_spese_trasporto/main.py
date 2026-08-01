@@ -1,12 +1,13 @@
 import functions_framework
 import os
 import json
-import fitz  # PyMuPDF
+import io
 import pandas as pd
 from google.cloud import storage
+from pypdf import PdfReader, PdfWriter
 import vertexai
 from vertexai.generative_models import GenerativeModel, Part, GenerationConfig
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import List, Optional
 
 # Inizializzazione Client Cloud Storage
@@ -15,7 +16,7 @@ DESTINATION_BUCKET_NAME = os.environ.get('DESTINATION_BUCKET')
 PROJECT_ID = os.environ.get('PROJECT_ID')
 LOCATION = os.environ.get('LOCATION', 'europe-west4')
 
-# Inizializzazione Vertex AI usando l'identità della Cloud Function
+# Inizializzazione Vertex AI
 vertexai.init(project=PROJECT_ID, location=LOCATION)
 
 # =====================================================================
@@ -51,19 +52,26 @@ class RigaFrSpB(BaseModel):
 class TabellaFrSpB(BaseModel): righe: List[RigaFrSpB]
 
 # =====================================================================
-# 2. LOGICA ESTRAZIONE OCR
+# 2. LOGICA ESTRAZIONE CON GEMINI 1.5 PRO (Nativo PDF)
 # =====================================================================
 
-def processa_pagina_ocr(pdf_doc, numero_pagina, pydantic_schema):
-    """Renderizza la pagina in immagine e sfrutta Gemini per l'estrazione strutturata."""
-    page = pdf_doc.load_page(numero_pagina - 1)
-    pix = page.get_pixmap(dpi=200)
-    image_bytes = pix.tobytes("png")
+def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
+    """Ritaglia la singola pagina e usa Gemini nativo per i PDF."""
     
-    image_part = Part.from_data(data=image_bytes, mime_type="image/png")
+    # Ritaglia solo la pagina specifica dal PDF per risparmiare token
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    writer.add_page(reader.pages[numero_pagina - 1])
+    
+    single_page_stream = io.BytesIO()
+    writer.write(single_page_stream)
+    single_page_stream.seek(0)
+    
+    # Invia il PDF nativamente a Gemini
+    pdf_part = Part.from_data(data=single_page_stream.read(), mime_type="application/pdf")
     
     prompt = """
-    Sei un estrattore dati specializzato in logistica. Leggi la tabella tariffaria nell'immagine.
+    Sei un estrattore dati specializzato in logistica. Leggi la tabella tariffaria presente in questo documento PDF.
     Estrai i dati e popolali esattamente secondo lo schema fornito.
     REGOLE RIGOROSE:
     1. Se vedi un incremento tariffario (es. '+0,18/kg' o '+0,05 per/+100g'), mettilo nei campi 'incremento_', inserendo SOLO il numero '0.18'.
@@ -73,15 +81,15 @@ def processa_pagina_ocr(pdf_doc, numero_pagina, pydantic_schema):
     5. Se un dato non è applicabile o manca, restituisci null.
     """
     
-    # Utilizziamo Gemini 1.5 Pro per la migliore accuratezza visiva e logica
+    # Gemini 1.5 Pro gestisce perfettamente i PDF e la formattazione tabellare
     model = GenerativeModel("gemini-1.5-pro")
     
     response = model.generate_content(
-        [image_part, prompt],
+        [pdf_part, prompt],
         generation_config=GenerationConfig(
             response_mime_type="application/json",
             response_schema=pydantic_schema,
-            temperature=0.0 # Impedisce risposte creative/allucinate
+            temperature=0.0 # Forza precisione chirurgica, zero creatività
         )
     )
     
@@ -93,7 +101,11 @@ def processa_pagina_ocr(pdf_doc, numero_pagina, pydantic_schema):
 # =====================================================================
 
 @functions_framework.cloud_event
-def elabora_spese_trasporto(cloud_event):
+def estrai_tariffe_pdf(cloud_event):
+    """
+    Attivata automaticamente quando un nuovo PDF viene caricato sul bucket.
+    Estrae i dati tramite Vertex AI e salva 4 file CSV.
+    """
     data = cloud_event.data
     source_bucket_name = data["bucket"]
     file_name = data["name"]
@@ -104,12 +116,16 @@ def elabora_spese_trasporto(cloud_event):
         print("Il file non è un PDF. Operazione ignorata.")
         return
 
+    # Controlli di sicurezza sulle variabili d'ambiente
+    if not DESTINATION_BUCKET_NAME:
+        print("ERRORE: Manca la variabile DESTINATION_BUCKET. Operazione interrotta.")
+        return
+
     source_bucket = storage_client.bucket(source_bucket_name)
     blob = source_bucket.blob(file_name)
     
-    # Download del file in RAM
+    # Download del PDF intero in RAM (veloce)
     pdf_bytes = blob.download_as_bytes()
-    pdf_doc = fitz.open("pdf", pdf_bytes)
     
     # Mappatura: (Pagina PDF, Schema Pydantic, Nome File CSV)
     tasks = [
@@ -125,8 +141,8 @@ def elabora_spese_trasporto(cloud_event):
         try:
             print(f"Estrazione pagina {pagina} per la creazione di {nome_csv}...")
             
-            # 1. Analisi visiva della tabella
-            df = processa_pagina_ocr(pdf_doc, pagina, schema)
+            # 1. Analisi dati con Vertex AI Nativo per PDF
+            df = processa_pagina_pdf(pdf_bytes, pagina, schema)
             
             # 2. Conversione DataFrame in stringa CSV
             csv_data = df.to_csv(index=False)
@@ -135,14 +151,11 @@ def elabora_spese_trasporto(cloud_event):
             out_blob = destination_bucket.blob(nome_csv)
             out_blob.upload_from_string(csv_data, content_type="text/csv")
             
-            print(f"File salvato con successo: gs://{DESTINATION_BUCKET_NAME}/{nome_csv}")
+            print(f"✅ File salvato con successo: gs://{DESTINATION_BUCKET_NAME}/{nome_csv}")
             
         except Exception as e:
-            print(f"Errore durante l'elaborazione del file {nome_csv} (Pagina {pagina}): {e}")
-            
-            # Creazione di un file di log nel bucket per monitorare gli errori
+            print(f"❌ Errore durante l'elaborazione del file {nome_csv} (Pagina {pagina}): {e}")
             error_blob = destination_bucket.blob(f"ERROR_{nome_csv}.txt")
             error_blob.upload_from_string(f"Errore estrazione: {str(e)}", content_type="text/plain")
 
-    pdf_doc.close()
-    print(f"Elaborazione del PDF {file_name} completata su tutti e 4 i task.")
+    print(f"🎉 Elaborazione del PDF {file_name} completata su tutti e 4 i task.")

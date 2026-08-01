@@ -23,7 +23,7 @@ resource "google_cloudfunctions2_function" "function_estrazione_spese_trasporto"
   
   build_config {
     runtime     = "python311"
-    entry_point = "elabora_spese_trasporto" # <-- DEVE COMBACIARE CON IL DEF IN MAIN.PY
+    entry_point = "estrai_tariffe_pdf" # <-- DEVE COMBACIARE CON IL DEF IN MAIN.PY
     
     source {
       storage_source {
