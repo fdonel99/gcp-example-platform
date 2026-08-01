@@ -442,7 +442,7 @@ def elabora_costi_logistici(input_path, output_path, bucket_supporto):
 # CLOUD FUNCTION ENTRY POINT
 # ==============================================================================
 @functions_framework.cloud_event
-def elabora_spese_trasporto(cloud_event):
+def calcola_spese_trasporto(cloud_event):
     """
     Trigger invocato da Google Cloud Storage al caricamento di un file.
     Utilizza la directory /tmp/ per lavorare i file Excel in sicurezza.
