@@ -52,7 +52,7 @@ class RigaFrSpB(BaseModel):
 class TabellaFrSpB(BaseModel): righe: List[RigaFrSpB]
 
 # =====================================================================
-# 2. LOGICA ESTRAZIONE CON GEMINI 1.5 PRO (Nativo PDF)
+# 2. LOGICA ESTRAZIONE CON GEMINI 1.5 PRO (Nativo PDF + Schema in Prompt)
 # =====================================================================
 
 def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
@@ -70,9 +70,15 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
     # Invia il PDF nativamente a Gemini
     pdf_part = Part.from_data(data=single_page_stream.read(), mime_type="application/pdf")
     
-    prompt = """
+    # TRUCCO: Convertiamo lo schema Pydantic in formato JSON e lo mettiamo nel prompt!
+    schema_json = json.dumps(pydantic_schema.model_json_schema(), indent=2)
+    
+    prompt = f"""
     Sei un estrattore dati specializzato in logistica. Leggi la tabella tariffaria presente in questo documento PDF.
-    Estrai i dati e popolali esattamente secondo lo schema fornito.
+    Estrai i dati e popolali esattamente secondo questo schema JSON:
+    
+    {schema_json}
+    
     REGOLE RIGOROSE:
     1. Se vedi un incremento tariffario (es. '+0,18/kg' o '+0,05 per/+100g'), mettilo nei campi 'incremento_', inserendo SOLO il numero '0.18'.
     2. Rimuovi lettere, simboli '+', '/', 'kg', 'g', e valute.
@@ -81,14 +87,13 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
     5. Se un dato non è applicabile o manca, restituisci null.
     """
     
-    # Gemini 1.5 Pro gestisce perfettamente i PDF e la formattazione tabellare
     model = GenerativeModel("gemini-1.5-pro")
     
     response = model.generate_content(
         [pdf_part, prompt],
         generation_config=GenerationConfig(
-            response_mime_type="application/json",
-            response_schema=pydantic_schema,
+            response_mime_type="application/json", # Forza l'output in JSON nativo
+            # response_schema rimosso per bypassare il bug ".pop()" dell'SDK Google
             temperature=0.0 # Forza precisione chirurgica, zero creatività
         )
     )
