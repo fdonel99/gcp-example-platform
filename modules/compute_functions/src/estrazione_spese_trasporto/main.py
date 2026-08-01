@@ -2,6 +2,7 @@ import functions_framework
 import os
 import json
 import io
+import re  # <--- IMPORTANTE: Aggiunto modulo per le espressioni regolari
 import pandas as pd
 from google.cloud import storage
 from pypdf import PdfReader, PdfWriter
@@ -51,13 +52,13 @@ class RigaFrSpB(BaseModel):
 class TabellaFrSpB(BaseModel): righe: List[RigaFrSpB]
 
 # =====================================================================
-# 2. LOGICA ESTRAZIONE CON GEMINI 2.5 PRO (Nativo PDF + Schema in Prompt)
+# 2. LOGICA ESTRAZIONE CON GEMINI 2.5 PRO E PULIZIA PANDAS
 # =====================================================================
 
 def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
     """Ritaglia la singola pagina e usa Gemini nativo per i PDF."""
     
-    # Ritaglia solo la pagina specifica dal PDF per risparmiare token
+    # Ritaglia solo la pagina specifica dal PDF
     reader = PdfReader(io.BytesIO(pdf_bytes))
     writer = PdfWriter()
     writer.add_page(reader.pages[numero_pagina - 1])
@@ -69,7 +70,6 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
     # Invia il PDF nativamente a Gemini
     pdf_part = Part.from_data(data=single_page_stream.read(), mime_type="application/pdf")
     
-    # TRUCCO: Convertiamo lo schema Pydantic in formato JSON e lo mettiamo nel prompt!
     schema_json = json.dumps(pydantic_schema.model_json_schema(), indent=2)
     
     prompt = f"""
@@ -91,14 +91,56 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
     response = model.generate_content(
         [pdf_part, prompt],
         generation_config=GenerationConfig(
-            response_mime_type="application/json", # Forza l'output in JSON nativo
-            # response_schema rimosso per bypassare il bug ".pop()" dell'SDK Google
-            temperature=0.0 # Forza precisione chirurgica, zero creatività
+            response_mime_type="application/json", 
+            temperature=0.0 
         )
     )
     
     dati_json = json.loads(response.text)
-    return pd.DataFrame(dati_json["righe"])
+    df = pd.DataFrame(dati_json["righe"])
+
+    # --- INIZIO POST-PROCESSING DETERMINISTICO IN PYTHON ---
+    
+    def pulisci_dimensioni(val):
+        if pd.isna(val) or val is None:
+            return val
+        # Divide alla prima occorrenza di ":" e prende il primo pezzo rimuovendo gli spazi extra
+        return str(val).split(':')[0].strip()
+
+    def pulisci_peso(val):
+        if pd.isna(val) or val is None:
+            return val
+        
+        testo = str(val).lower()
+        is_kg = 'kg' in testo
+        
+        # Sostituisce eventuali virgole con il punto decimale
+        testo = testo.replace(',', '.')
+        
+        # Estrae i numeri, inclusi eventuali decimali (es. da "≤ 3.90 kg" estrae "3.90")
+        match = re.search(r'(\d+\.?\d*)', testo)
+        if match:
+            numero = float(match.group(1))
+            
+            # Se la stringa originale conteneva "kg", moltiplica per 1000
+            if is_kg:
+                numero = numero * 1000
+                
+            # Restituisce il numero come stringa intera (es: 3900 invece di 3900.0)
+            return str(int(numero))
+        
+        return str(val) # Fallback in caso di valore inaspettato senza numeri
+    
+    # Applica le funzioni di pulizia alle colonne
+    if 'dimensioni' in df.columns:
+        df['dimensioni'] = df['dimensioni'].apply(pulisci_dimensioni)
+        
+    if 'peso' in df.columns:
+        df['peso'] = df['peso'].apply(pulisci_peso)
+        
+    # --- FINE POST-PROCESSING ---
+
+    return df
 
 # =====================================================================
 # 3. ENTRY POINT DELLA CLOUD FUNCTION
@@ -120,7 +162,6 @@ def estrai_tariffe_pdf(cloud_event):
         print("Il file non è un PDF. Operazione ignorata.")
         return
 
-    # Controlli di sicurezza sulle variabili d'ambiente
     if not DESTINATION_BUCKET_NAME:
         print("ERRORE: Manca la variabile DESTINATION_BUCKET. Operazione interrotta.")
         return
@@ -128,10 +169,8 @@ def estrai_tariffe_pdf(cloud_event):
     source_bucket = storage_client.bucket(source_bucket_name)
     blob = source_bucket.blob(file_name)
     
-    # Download del PDF intero in RAM (veloce)
     pdf_bytes = blob.download_as_bytes()
     
-    # Mappatura: (Pagina PDF, Schema Pydantic, Nome File CSV)
     tasks = [
         (6, TabellaItDeA, "df_costi_it_de_A.csv"),
         (7, TabellaItDeB, "df_costi_it_de_B.csv"),
@@ -145,13 +184,10 @@ def estrai_tariffe_pdf(cloud_event):
         try:
             print(f"Estrazione pagina {pagina} per la creazione di {nome_csv}...")
             
-            # 1. Analisi dati con Vertex AI Nativo per PDF
             df = processa_pagina_pdf(pdf_bytes, pagina, schema)
             
-            # 2. Conversione DataFrame in stringa CSV
             csv_data = df.to_csv(index=False)
             
-            # 3. Upload nel bucket di destinazione
             out_blob = destination_bucket.blob(nome_csv)
             out_blob.upload_from_string(csv_data, content_type="text/csv")
             
