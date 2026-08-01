@@ -79,11 +79,12 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
     {schema_json}
     
     REGOLE RIGOROSE:
-    1. Se vedi un incremento tariffario (es. '+0,18/kg' o '+0,05 per/+100g'), mettilo nei campi 'incremento_', inserendo SOLO il numero '0.18'.
-    2. Rimuovi lettere, simboli '+', '/', 'kg', 'g', e valute.
-    3. Converti le virgole in punti decimali ('2,50' -> 2.50).
-    4. Cerca di associare le fasce incrementali alle fasce di peso base corrispondenti per restituire un record omogeneo.
-    5. Se un dato non è applicabile o manca, restituisci null.
+    1. ATTENZIONE AL TESTO NASCOSTO (CRITICO): Il livello di testo di questo PDF è corrotto. Sotto i numeri visibili sono rimaste incastrate vecchie tariffe invisibili (es. 2.50, 2.51 nella colonna SE_SEK). DEVI IGNORARE il testo nascosto. Usa ESCLUSIVAMENTE la tua visione ottica per leggere i numeri stampati visibilmente sulla pagina (es. 60.01, 60.11, 64.08).
+    2. Non unire mai due o più numeri nello stesso campo. Ogni colonna ha il suo valore separato.
+    3. Se vedi un incremento tariffario (es. '+0,18/kg' o '+0,05 per/+100g'), mettilo nei campi 'incremento_', inserendo SOLO il numero '0.18'.
+    4. Rimuovi lettere, simboli '+', '/', 'kg', 'g', e valute.
+    5. Converti le virgole in punti decimali ('2,50' -> 2.50).
+    6. Se un dato non è applicabile o manca, restituisci null.
     """
     
     model = GenerativeModel("gemini-2.5-pro")
