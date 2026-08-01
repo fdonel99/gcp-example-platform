@@ -45,6 +45,7 @@ module "compute_functions" {
   bucket_spese_trasporto_name    = module.data_storage.bucket_spese_trasporto_name
   bucket_infografica_input_name  = module.data_storage.bucket_infografica_input_name
   bucket_infografica_output_name = module.data_storage.bucket_infografica_output_name
+  bucket_listino_costi_trasporto_name = google_storage_bucket.bucket_listino_costi_trasporto.name
 }
 
 # =======================================================
