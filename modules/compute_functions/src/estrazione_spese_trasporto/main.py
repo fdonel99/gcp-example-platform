@@ -2,7 +2,7 @@ import functions_framework
 import os
 import json
 import io
-import re  # <--- IMPORTANTE: Aggiunto modulo per le espressioni regolari
+import re 
 import pandas as pd
 from google.cloud import storage
 from pypdf import PdfReader, PdfWriter
