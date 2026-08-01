@@ -169,13 +169,3 @@ resource "google_storage_bucket" "bucket_listino_costi_trasporto" {
   public_access_prevention    = "enforced"
   force_destroy               = local.is_test
 }
-
-resource "google_storage_bucket" "bucket_listino_costi_trasporto" {
-  project                     = var.project_id
-  name                        = var.environment == "prod" ? "bkt-listino-costi-trasporto" : "bkt-listino-costi-trasporto-${var.project_id}"
-  location                    = "EU"
-  storage_class               = "STANDARD"
-  uniform_bucket_level_access = true
-  public_access_prevention    = "enforced"
-  force_destroy               = local.is_test
-}
