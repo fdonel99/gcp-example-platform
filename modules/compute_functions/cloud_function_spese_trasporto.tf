@@ -1,6 +1,6 @@
 # SPESE DI TRASPORTO
 
-data "archive_file" "zip_calcolo_spese_trasporto" {
+data "archive_file" "zip_calcolo_spese_trasporto"  {
   type        = "zip"
   source_dir  = "${path.module}/src/calcolo_spese_trasporto" 
   output_path = "${path.module}/src/calcolo_spese_trasporto.zip"

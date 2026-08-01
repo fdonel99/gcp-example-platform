@@ -122,7 +122,7 @@ resource "google_storage_bucket" "tf_state" {
   }
 }
 
-resource "google_storage_bucket_object" "file_statici_spese" {
+resource "google_storage_bucket_object" "file_statici_spese"  {
   for_each = fileset("${path.module}/../compute_functions/src/file_statici", "*")
 
   name   = each.value                                
