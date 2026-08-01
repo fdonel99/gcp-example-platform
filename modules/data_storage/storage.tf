@@ -60,7 +60,7 @@ resource "google_storage_bucket" "spese_trasporto" {
     }
     condition {
       age            = 5
-      matches_suffix = ["elaborato.xlsx"] 
+      matches_suffix = ["elaborato.xlsx", ".csv"]
     }
   }
 }

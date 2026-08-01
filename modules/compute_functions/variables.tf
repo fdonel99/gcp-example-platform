@@ -43,3 +43,8 @@ variable "bucket_infografica_output_name" {
   type        = string
   description = "Il nome del bucket di output dove salvare le infografiche tradotte"
 }
+
+variable "bucket_listino_costi_trasporto_name" {
+  type        = string
+  description = "Il nome del bucket di input per i listini PDF (usato per il trigger Eventarc)"
+}

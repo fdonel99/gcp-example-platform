@@ -1,0 +1,6 @@
+functions-framework==3.*
+google-cloud-storage==2.*
+vertexai==1.*
+pymupdf==1.*
+pandas==2.*
+pydantic==2.*
