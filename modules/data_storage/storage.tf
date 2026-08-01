@@ -127,7 +127,7 @@ resource "google_storage_bucket_object" "file_statici_spese" {
 
   name   = each.value                                
   bucket = google_storage_bucket.spese_trasporto.name 
-  source = "${path.module}/src/file_statici/${each.value}" 
+  source = "${path.module}/../compute_functions/src/file_statici/${each.value}"
   detect_md5hash = filemd5("${path.module}/../compute_functions/src/file_statici/${each.value}")
 }
 
