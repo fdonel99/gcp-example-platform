@@ -123,11 +123,12 @@ resource "google_storage_bucket" "tf_state" {
 }
 
 resource "google_storage_bucket_object" "file_statici_spese" {
-  for_each = fileset("${path.module}/src/file_statici", "*")
+  for_each = fileset("${path.module}/../compute_functions/src/file_statici", "*")
 
   name   = each.value                                
   bucket = google_storage_bucket.spese_trasporto.name 
   source = "${path.module}/src/file_statici/${each.value}" 
+  detect_md5hash = filemd5("${path.module}/../compute_functions/src/file_statici/${each.value}")
 }
 
 resource "google_storage_bucket" "bucket_codice_funzioni" {
