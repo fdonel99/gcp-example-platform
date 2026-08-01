@@ -24,14 +24,18 @@ resource "google_storage_bucket" "export_ns_zip" {
   public_access_prevention    = "enforced"
   force_destroy               = local.is_test
   versioning {
-    enabled = true
+    enabled = local.is_test
   }
-  lifecycle_rule {
-    action {
-      type = "Delete"
-    }
-    condition {
-      days_since_noncurrent_time = 21
+  dynamic "lifecycle_rule" {
+    for_each = local.is_test ? [1] : []
+    
+    content {
+      action {
+        type = "Delete"
+      }
+      condition {
+        days_since_noncurrent_time = 21
+      }
     }
   }
 }
@@ -75,7 +79,7 @@ resource "google_storage_bucket" "infografica_input" {
   force_destroy               = local.is_test
   lifecycle_rule {
     condition {
-      age = 2
+      age = 1
     }
     action {
       type = "Delete"
@@ -93,7 +97,7 @@ resource "google_storage_bucket" "infografica_output" {
   force_destroy               = local.is_test
   lifecycle_rule {
     condition {
-      age = 2
+      age = 1
     }
     action {
       type = "Delete"
@@ -117,7 +121,8 @@ resource "google_storage_bucket" "tf_state" {
       type = "Delete"
     }
     condition {
-      days_since_noncurrent_time = 7
+      # Se è test cancella dopo 7 giorni, altrimenti (prod) cancella dopo 90 giorni
+      days_since_noncurrent_time = local.is_test ? 7 : 90
     }
   }
 }
@@ -139,14 +144,30 @@ resource "google_storage_bucket" "bucket_codice_funzioni" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = local.is_test
-  lifecycle_rule {
-    action {
-      type = "Delete"
-    }
-    condition {
-      days_since_noncurrent_time = 21
+  
+  dynamic "lifecycle_rule" {
+    for_each = local.is_test ? [1] : []
+    
+    content {
+      action {
+        type = "Delete"
+      }
+      condition {
+        age            = 7           
+        matches_suffix = [".zip"]   
+      }
     }
   }
+} 
+
+resource "google_storage_bucket" "bucket_listino_costi_trasporto" {
+  project                     = var.project_id
+  name                        = var.environment == "prod" ? "bkt-listino-costi-trasporto" : "bkt-listino-costi-trasporto-${var.project_id}"
+  location                    = "EU"
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  force_destroy               = local.is_test
 }
 
 resource "google_storage_bucket" "bucket_listino_costi_trasporto" {

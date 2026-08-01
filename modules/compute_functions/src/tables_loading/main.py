@@ -17,6 +17,8 @@ import functions_framework
 # Import Cloud e Dati
 from google.cloud import bigquery
 import polars as pl
+import google.auth
+import gspread
 
 # --- CONFIGURAZIONE TELEGRAM ---
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN', '8906093462:AAFi_3hQum83NXR7dMYLu0RZXKDLvJwdGro')
@@ -56,22 +58,34 @@ def run_sqlite_to_bigquery(request):
     Cerca l'ultimo ZIP (se inserito negli ultimi 7 giorni), estrae e seleziona 
     SOLO il file SQLite corrispondente, lo elabora in parallelo su BigQuery e pulisce la RAM.
     """
-    # 1. CERCA IL FILE DA ELABORARE
-    list_of_files = glob.glob(os.path.join(MOUNT_PATH, '*.zip'))
+    # 1. CERCA IL FILE DA ELABORARE (Nome fisso per rispettare il versioning Terraform)
+    zip_path = os.path.join(MOUNT_PATH, 'export_latest.zip')
+    file_name = 'export_latest.zip'
     
-    if not list_of_files:
-        msg_blocco = "Tabelle non aggiornate. Nessun file inserito sul bucket negli ultimi 7 giorni"
+    if not os.path.exists(zip_path):
+        msg_blocco = "Tabelle non aggiornate. File export_latest.zip non trovato sul bucket."
         print(msg_blocco)
         invia_notifica_telegram(msg_blocco)
         return msg_blocco, 200
 
-    zip_path = max(list_of_files, key=os.path.getctime)
-    file_name = os.path.basename(zip_path)
-    
     file_timestamp = os.path.getctime(zip_path)
     file_date = datetime.fromtimestamp(file_timestamp, tz=timezone.utc)
     now_utc = datetime.now(timezone.utc)
     
+    # 2. CONTROLLO SE IL FILE È GIÀ STATO ELABORATO (Usando il marker)
+    marker_path = os.path.join(MOUNT_PATH, 'marker_elaborato.txt')
+    if os.path.exists(marker_path):
+        with open(marker_path, 'r') as f:
+            # Legge il timestamp dell'ultima esecuzione
+            content = f.read().strip()
+            last_processed_ts = float(content) if content else 0.0
+        
+        # Se lo ZIP non è stato aggiornato dall'ultima esecuzione, salta
+        if file_timestamp <= last_processed_ts:
+            print(f"Nessun nuovo file da elaborare. {file_name} già processato in precedenza.")
+            return "File già elaborato", 200
+
+    # 3. CONTROLLO DEI 7 GIORNI
     if (now_utc - file_date) > timedelta(days=6):
         msg_blocco = "Tabelle non aggiornate. Nessun file inserito sul bucket negli ultimi 7 giorni"
         print(f"L'ultimo file '{file_name}' è del {file_date.strftime('%Y-%m-%d %H:%M:%S')}. {msg_blocco}")
@@ -92,15 +106,7 @@ def run_sqlite_to_bigquery(request):
             zip_ref.extractall(extract_to)
         print("Estrazione completata.")
 
-        if not file_name.startswith('export_') or len(file_name) < 15:
-            errore_msg = f"Formato del nome zip non valido: {file_name}"
-            shutil.rmtree(extract_to, ignore_errors=True)
-            print(f"Errore: {errore_msg}")
-            invia_notifica_telegram(f"❌ *Errore:* {errore_msg}")
-            return errore_msg, 400
-
-        data_target = file_name[7:15]
-
+        # --- SELEZIONE DIRETTA DELL'SQLITE ---
         sqlite_files = [f for f in os.listdir(extract_to) if f.endswith('.sqlite')]
         if not sqlite_files:
             errore_msg = "Il file ZIP estratto non contiene file `.sqlite`."
@@ -108,19 +114,9 @@ def run_sqlite_to_bigquery(request):
             print(f"Errore: {errore_msg}")
             invia_notifica_telegram(f"❌ *Errore:* {errore_msg}")
             return errore_msg, 400
-
-        sqlite_path = None
-        for f in sqlite_files:
-            if f.startswith('export_') and f[7:15] == data_target:
-                sqlite_path = os.path.join(extract_to, f)
-                break
         
-        if not sqlite_path:
-            errore_msg = f"Nessun file `.sqlite` corrispondente alla data {data_target} trovato nello ZIP."
-            shutil.rmtree(extract_to, ignore_errors=True)
-            print(f"Errore: {errore_msg}")
-            invia_notifica_telegram(f"❌ *Errore:* {errore_msg}")
-            return errore_msg, 400
+        # Prende semplicemente il file SQLite estratto (ignorando come si chiama)
+        sqlite_path = os.path.join(extract_to, sqlite_files[0])
 
         print(f"File SQLite selezionato per l'elaborazione: {os.path.basename(sqlite_path)}")
 
@@ -182,7 +178,6 @@ def run_sqlite_to_bigquery(request):
                     df_tipo = df_tipo.select(["TIPO", "DESCRIZIONE TIPO"]).unique(subset=["TIPO"])
                     
                     # 3. Cast delle chiavi a Stringa (Utf8) per evitare errori di tipo durante la join
-                    # Spesso Google Sheet interpreta i numeri come Interi, mentre in SQLite potrebbero essere Testo
                     df = df.with_columns([
                         pl.col("MOVIMENTO").cast(pl.Utf8),
                         pl.col("TIPO").cast(pl.Utf8)
@@ -236,12 +231,14 @@ def run_sqlite_to_bigquery(request):
         if os.path.exists(extract_to):
             shutil.rmtree(extract_to, ignore_errors=True)
 
-        processed_zip_path = f"{zip_path}.elaborato"
-        os.rename(zip_path, processed_zip_path)
-        print(f"File originale rinominato in: {os.path.basename(processed_zip_path)}")
+        # --- AGGIORNAMENTO DEL MARKER INVECE DEL RINOMINO ---
+        # Scriviamo il timestamp del file appena processato per evitare di ri-processarlo.
+        with open(marker_path, 'w') as f:
+            f.write(str(file_timestamp))
+        print("Marker di elaborazione aggiornato. File originale lasciato intatto.")
 
         print("Processo completato con successo.")
-        invia_notifica_telegram(f"✅ *Sincronizzazione Completata!*\nTutti i dati di `{file_name}` sono stati caricati su BigQuery e il file è stato archiviato.")
+        invia_notifica_telegram(f"✅ *Sincronizzazione Completata!*\nTutti i dati di `{file_name}` sono stati caricati su BigQuery.")
         
         return "Elaborazione completata con successo", 200
         

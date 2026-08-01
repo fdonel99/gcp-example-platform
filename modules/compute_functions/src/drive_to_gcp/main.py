@@ -118,21 +118,7 @@ def drive_to_gcp(request):
                 }, 200
         
         # Determina il nome di destinazione nel bucket
-        destination_blob_name = request_json.get('destination_name', original_name)
-        
-        # 5. Controllo esistenza su GCS prima del download
-        bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(destination_blob_name)
-        
-        print(f"Verifica esistenza di '{destination_blob_name}' nel bucket '{bucket_name}'...")
-        if blob.exists():
-            print(f"⚠️ Il file '{destination_blob_name}' è già presente. Operazione saltata.")
-            invia_notifica_telegram(f"⏩ *Nessuna azione necessaria*\nIl file `{destination_blob_name}` non è stato prelevato perché risulta già presente nel bucket Cloud Storage `{bucket_name}`.")
-            return {
-                "status": "saltato",
-                "file_selezionato": original_name,
-                "messaggio": "File già presente su GCS."
-            }, 200
+        destination_blob_name = "export_latest.zip"
         
         # 6. Download del file da Drive in memoria
         print(f"Download di '{original_name}' da Google Drive...")
