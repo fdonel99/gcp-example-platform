@@ -149,6 +149,54 @@ def run_sqlite_to_bigquery(request):
                 query = f"SELECT * FROM {t_name}"
                 
                 df = pl.read_database_uri(query=query, uri=sqlite_uri)
+                
+                # --- INIZIO NUOVA LOGICA DBO_MOVIMENTI ---
+                if t_name == "dbo_movimenti":
+                    print("Applicazione regole custom e arricchimento dati per dbo_movimenti...")
+                    
+                    if "SKU" in df.columns:
+                        df = df.with_columns(pl.col("SKU").str.replace_all(" ", "", literal=True))
+                    
+                    print("Connessione a Google Sheets per Left Join...")
+                    # Autenticazione usando il Service Account della Cloud Function
+                    credentials, _ = google.auth.default(scopes=[
+                        'https://www.googleapis.com/auth/spreadsheets.readonly',
+                        'https://www.googleapis.com/auth/drive.readonly'
+                    ])
+                    gc_sheets = gspread.authorize(credentials)
+                    
+                    # Apri il file tramite ID
+                    SHEET_ID = '1ptH6m4mS6UozgrtRUfoP_wMMwbx7wTiIn1T6eJ0Vy1c'
+                    sh = gc_sheets.open_by_key(SHEET_ID)
+                    
+                    # 1. Estrai e prepara il foglio MOVIMENTO
+                    ws_mov = sh.worksheet('MOVIMENTO')
+                    df_mov = pl.DataFrame(ws_mov.get_all_records())
+                    # Seleziono solo le colonne utili e rimuovo eventuali duplicati per non sballare la join
+                    df_mov = df_mov.select(["MOVIMENTO", "DESCRIZIONE MOVIMENTO", "CLASSIFICAZIONE"]).unique(subset=["MOVIMENTO"])
+                    
+                    # 2. Estrai e prepara il foglio TIPO
+                    ws_tipo = sh.worksheet('TIPO')
+                    df_tipo = pl.DataFrame(ws_tipo.get_all_records())
+                    # Seleziono solo le colonne utili e rimuovo eventuali duplicati
+                    df_tipo = df_tipo.select(["TIPO", "DESCRIZIONE TIPO"]).unique(subset=["TIPO"])
+                    
+                    # 3. Cast delle chiavi a Stringa (Utf8) per evitare errori di tipo durante la join
+                    # Spesso Google Sheet interpreta i numeri come Interi, mentre in SQLite potrebbero essere Testo
+                    df = df.with_columns([
+                        pl.col("MOVIMENTO").cast(pl.Utf8),
+                        pl.col("TIPO").cast(pl.Utf8)
+                    ])
+                    df_mov = df_mov.with_columns(pl.col("MOVIMENTO").cast(pl.Utf8))
+                    df_tipo = df_tipo.with_columns(pl.col("TIPO").cast(pl.Utf8))
+                    
+                    # 4. Esecuzione delle Left Join
+                    df = df.join(df_mov, on="MOVIMENTO", how="left")
+                    df = df.join(df_tipo, on="TIPO", how="left")
+                    
+                    print("Arricchimento completato con successo.")
+                # --- FINE NUOVA LOGICA DBO_MOVIMENTI ---
+
                 df.write_parquet(parquet_path)
                 
                 del df 

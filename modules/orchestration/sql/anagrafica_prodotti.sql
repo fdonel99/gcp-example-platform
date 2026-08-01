@@ -94,68 +94,66 @@ CREATE OR REPLACE TABLE `${project_id}.NORTHSTAR.ANAGRAFICA_PRODOTTO` AS (
         ),
         
         -- base_image
-        CASE WHEN NULLIF(base_image, '') IS NOT NULL AND base_image LIKE '%-%'
-            THEN CONCAT(base_img_url, SPLIT(base_image, '-')[SAFE_OFFSET(0)], '/', base_image) 
+        CASE WHEN NULLIF(base_image, '') IS NOT NULL AND LENGTH(base_image) >= 2
+            THEN CONCAT(base_img_url, SUBSTR(base_image, 1, 2), '/', base_image) 
             ELSE base_image END AS base_image,
 
         -- thumbnail_image
-        CASE WHEN NULLIF(thumbnail_image, '') IS NOT NULL AND COALESCE(base_image, thumbnail_image) LIKE '%-%'
-            THEN CONCAT(base_img_url, SPLIT(COALESCE(base_image, thumbnail_image), '-')[SAFE_OFFSET(0)], '/', thumbnail_image) 
+        CASE WHEN NULLIF(thumbnail_image, '') IS NOT NULL AND LENGTH(COALESCE(base_image, thumbnail_image)) >= 2
+            THEN CONCAT(base_img_url, SUBSTR(COALESCE(base_image, thumbnail_image), 1, 2), '/', thumbnail_image) 
             ELSE thumbnail_image END AS thumbnail_image,
             
         -- small_image
-        CASE WHEN NULLIF(small_image, '') IS NOT NULL AND COALESCE(base_image, small_image) LIKE '%-%'
-            THEN CONCAT(base_img_url, SPLIT(COALESCE(base_image, small_image), '-')[SAFE_OFFSET(0)], '/', small_image) 
+        CASE WHEN NULLIF(small_image, '') IS NOT NULL AND LENGTH(COALESCE(base_image, small_image)) >= 2
+            THEN CONCAT(base_img_url, SUBSTR(COALESCE(base_image, small_image), 1, 2), '/', small_image) 
             ELSE small_image END AS small_image,
             
-        -- gallery_0 ... 9 ...
-        CASE WHEN NULLIF(gallery_0, '') IS NOT NULL AND COALESCE(base_image, gallery_0) LIKE '%-%'
-            THEN CONCAT(base_img_url, SPLIT(COALESCE(base_image, gallery_0), '-')[SAFE_OFFSET(0)], '/', gallery_0) 
+        -- gallery_0 ... 9
+        CASE WHEN NULLIF(gallery_0, '') IS NOT NULL AND LENGTH(COALESCE(base_image, gallery_0)) >= 2
+            THEN CONCAT(base_img_url, SUBSTR(COALESCE(base_image, gallery_0), 1, 2), '/', gallery_0) 
             ELSE gallery_0 END AS gallery_0,
             
-        CASE WHEN NULLIF(gallery_1, '') IS NOT NULL AND COALESCE(base_image, gallery_1) LIKE '%-%'
-            THEN CONCAT(base_img_url, SPLIT(COALESCE(base_image, gallery_1), '-')[SAFE_OFFSET(0)], '/', gallery_1) 
+        CASE WHEN NULLIF(gallery_1, '') IS NOT NULL AND LENGTH(COALESCE(base_image, gallery_1)) >= 2
+            THEN CONCAT(base_img_url, SUBSTR(COALESCE(base_image, gallery_1), 1, 2), '/', gallery_1) 
             ELSE gallery_1 END AS gallery_1,
             
-        CASE WHEN NULLIF(gallery_2, '') IS NOT NULL AND COALESCE(base_image, gallery_2) LIKE '%-%'
-            THEN CONCAT(base_img_url, SPLIT(COALESCE(base_image, gallery_2), '-')[SAFE_OFFSET(0)], '/', gallery_2) 
+        CASE WHEN NULLIF(gallery_2, '') IS NOT NULL AND LENGTH(COALESCE(base_image, gallery_2)) >= 2
+            THEN CONCAT(base_img_url, SUBSTR(COALESCE(base_image, gallery_2), 1, 2), '/', gallery_2) 
             ELSE gallery_2 END AS gallery_2,
             
-        CASE WHEN NULLIF(gallery_3, '') IS NOT NULL AND COALESCE(base_image, gallery_3) LIKE '%-%'
-            THEN CONCAT(base_img_url, SPLIT(COALESCE(base_image, gallery_3), '-')[SAFE_OFFSET(0)], '/', gallery_3) 
+        CASE WHEN NULLIF(gallery_3, '') IS NOT NULL AND LENGTH(COALESCE(base_image, gallery_3)) >= 2
+            THEN CONCAT(base_img_url, SUBSTR(COALESCE(base_image, gallery_3), 1, 2), '/', gallery_3) 
             ELSE gallery_3 END AS gallery_3,
             
-        CASE WHEN NULLIF(gallery_4, '') IS NOT NULL AND COALESCE(base_image, gallery_4) LIKE '%-%'
-            THEN CONCAT(base_img_url, SPLIT(COALESCE(base_image, gallery_4), '-')[SAFE_OFFSET(0)], '/', gallery_4) 
+        CASE WHEN NULLIF(gallery_4, '') IS NOT NULL AND LENGTH(COALESCE(base_image, gallery_4)) >= 2
+            THEN CONCAT(base_img_url, SUBSTR(COALESCE(base_image, gallery_4), 1, 2), '/', gallery_4) 
             ELSE gallery_4 END AS gallery_4,
             
-        CASE WHEN NULLIF(gallery_5, '') IS NOT NULL AND COALESCE(base_image, gallery_5) LIKE '%-%'
-            THEN CONCAT(base_img_url, SPLIT(COALESCE(base_image, gallery_5), '-')[SAFE_OFFSET(0)], '/', gallery_5) 
+        CASE WHEN NULLIF(gallery_5, '') IS NOT NULL AND LENGTH(COALESCE(base_image, gallery_5)) >= 2
+            THEN CONCAT(base_img_url, SUBSTR(COALESCE(base_image, gallery_5), 1, 2), '/', gallery_5) 
             ELSE gallery_5 END AS gallery_5,
             
-        CASE WHEN NULLIF(gallery_6, '') IS NOT NULL AND COALESCE(base_image, gallery_6) LIKE '%-%'
-            THEN CONCAT(base_img_url, SPLIT(COALESCE(base_image, gallery_6), '-')[SAFE_OFFSET(0)], '/', gallery_6) 
+        CASE WHEN NULLIF(gallery_6, '') IS NOT NULL AND LENGTH(COALESCE(base_image, gallery_6)) >= 2
+            THEN CONCAT(base_img_url, SUBSTR(COALESCE(base_image, gallery_6), 1, 2), '/', gallery_6) 
             ELSE gallery_6 END AS gallery_6,
             
-        CASE WHEN NULLIF(gallery_7, '') IS NOT NULL AND COALESCE(base_image, gallery_7) LIKE '%-%'
-            THEN CONCAT(base_img_url, SPLIT(COALESCE(base_image, gallery_7), '-')[SAFE_OFFSET(0)], '/', gallery_7) 
+        CASE WHEN NULLIF(gallery_7, '') IS NOT NULL AND LENGTH(COALESCE(base_image, gallery_7)) >= 2
+            THEN CONCAT(base_img_url, SUBSTR(COALESCE(base_image, gallery_7), 1, 2), '/', gallery_7) 
             ELSE gallery_7 END AS gallery_7,
             
-        CASE WHEN NULLIF(gallery_8, '') IS NOT NULL AND COALESCE(base_image, gallery_8) LIKE '%-%'
-            THEN CONCAT(base_img_url, SPLIT(COALESCE(base_image, gallery_8), '-')[SAFE_OFFSET(0)], '/', gallery_8) 
+        CASE WHEN NULLIF(gallery_8, '') IS NOT NULL AND LENGTH(COALESCE(base_image, gallery_8)) >= 2
+            THEN CONCAT(base_img_url, SUBSTR(COALESCE(base_image, gallery_8), 1, 2), '/', gallery_8) 
             ELSE gallery_8 END AS gallery_8,
             
-        CASE WHEN NULLIF(gallery_9, '') IS NOT NULL AND COALESCE(base_image, gallery_9) LIKE '%-%'
-            THEN CONCAT(base_img_url, SPLIT(COALESCE(base_image, gallery_9), '-')[SAFE_OFFSET(0)], '/', gallery_9) 
+        CASE WHEN NULLIF(gallery_9, '') IS NOT NULL AND LENGTH(COALESCE(base_image, gallery_9)) >= 2
+            THEN CONCAT(base_img_url, SUBSTR(COALESCE(base_image, gallery_9), 1, 2), '/', gallery_9) 
             ELSE gallery_9 END AS gallery_9
             
     FROM base_data
 );
 
--- 2. Costruzione della stringa URI con la data corrente (Timezone Europa/Roma)
 SET dynamic_uri = CONCAT('gs://${bucket_name}/anagrafica_', CAST(CURRENT_DATE('Europe/Rome') AS STRING), '_*.csv');
 
--- 3. Costruzione della query SQL dinamica per l'esportazione
 SET export_query = FORMAT("""
     EXPORT DATA OPTIONS(
       uri='%s',
