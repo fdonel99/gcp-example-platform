@@ -32,3 +32,8 @@ output "bucket_infografica_input_name" {
 output "bucket_infografica_output_name" {
   value = google_storage_bucket.infografica_output.name
 }
+
+output "bucket_listino_costi_trasporto_name" {
+  description = "Il nome del bucket di input per le tariffe"
+  value       = google_storage_bucket.bucket_listino_costi_trasporto.name
+}

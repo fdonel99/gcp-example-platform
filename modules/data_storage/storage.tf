@@ -139,6 +139,14 @@ resource "google_storage_bucket" "bucket_codice_funzioni" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = local.is_test
+  lifecycle_rule {
+    action {
+      type = "Delete"
+    }
+    condition {
+      days_since_noncurrent_time = 21
+    }
+  }
 }
 
 resource "google_storage_bucket" "bucket_listino_costi_trasporto" {
