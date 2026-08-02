@@ -366,6 +366,20 @@ def elabora_costi_logistici(input_path, output_path, bucket_supporto):
     print(f"Caricamento file di input: {input_path}...")
     df = pd.read_excel(input_path)
 
+    df = pd.read_excel(input_path, header=None)
+    
+    # 2. Eliminiamo tutte le righe che sono COMPLETAMENTE vuote (NaN in tutte le celle)
+    df = df.dropna(how='all')
+    
+    # 3. Se il file non è completamente vuoto, promuoviamo la prima riga utile a intestazione
+    if not df.empty:
+        # Prende i valori della prima riga sopravvissuta
+        nuove_colonne = df.iloc[0] 
+        # Li imposta come nomi delle colonne
+        df.columns = nuove_colonne 
+        # Elimina la riga delle intestazioni dal corpo dei dati veri e propri
+        df = df.iloc[1:].reset_index(drop=True)
+
     # =====================================================================
     # PULIZIA COLONNE: Converte tutto in MAIUSCOLO e rimuove spazi extra
     # =====================================================================
