@@ -24,7 +24,7 @@ VERTEX_LOCATION = 'europe-west4'
 vertexai.init(project=PROJECT_ID, location=VERTEX_LOCATION)
 
 # ID del Google Sheet di destinazione
-SPREADSHEET_ID = '1ptH6m4mS6UozgrtRUfoP_wMMwbx7wTiIn1T6eJ0Vy1c'
+SPREADSHEET_ID = '1TYpxmD6H_9v-ZeeOqSZqiHF50cyzj6xpg51zTaTEQWE'
 
 # Autenticazione nativa di Google Cloud per accedere a Sheets
 credentials, _ = google.auth.default(scopes=[
@@ -173,6 +173,18 @@ def estrai_tariffe_pdf(cloud_event):
 
     # Download del PDF
     source_bucket = storage_client.bucket(source_bucket_name)
+    
+    # Pulisco il bucket
+    try:
+        tutti_i_file = source_bucket.list_blobs()
+        for file_esistente in tutti_i_file:
+            # Se il file nel bucket NON è quello appena caricato, distruggilo
+            if file_esistente.name != file_name:
+                print(f"🧹 Pulizia: Elimino il vecchio listino '{file_esistente.name}'")
+                file_esistente.delete()
+    except Exception as e:
+        print(f"⚠️ Attenzione: Impossibile eliminare i vecchi file. Errore: {e}")
+
     blob = source_bucket.blob(file_name)
     pdf_bytes = blob.download_as_bytes()
     
