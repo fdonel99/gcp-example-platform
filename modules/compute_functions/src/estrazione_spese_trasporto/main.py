@@ -24,7 +24,7 @@ VERTEX_LOCATION = 'europe-west4'
 vertexai.init(project=PROJECT_ID, location=VERTEX_LOCATION)
 
 # ID del Google Sheet di destinazione
-SPREADSHEET_ID = '1TYpxmD6H_9v-ZeeOqSZqiHF50cyzj6xpg51zTaTEQWE'
+SPREADSHEET_ID = '1ptH6m4mS6UozgrtRUfoP_wMMwbx7wTiIn1T6eJ0Vy1c'
 
 # Autenticazione nativa di Google Cloud per accedere a Sheets
 credentials, _ = google.auth.default(scopes=[

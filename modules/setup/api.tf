@@ -57,7 +57,8 @@ locals {
     "telemetry.googleapis.com",
     "texttospeech.googleapis.com",
     "translate.googleapis.com",
-    "vision.googleapis.com" 
+    "vision.googleapis.com",
+    "sheets.googleapis.com" 
   ]
 }
 
