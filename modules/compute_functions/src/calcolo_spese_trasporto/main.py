@@ -10,13 +10,12 @@ from gspread_dataframe import get_as_dataframe
 
 # --- CONFIGURAZIONE GOOGLE SHEETS ---
 SPREADSHEET_ID = os.environ.get('SPREADSHEET_ID', '1TYpxmD6H_9v-ZeeOqSZqiHF50cyzj6xpg51zTaTEQWE')
-
-# Autenticazione nativa di Google Cloud per accedere a Sheets
 credentials, _ = google.auth.default(scopes=[
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
 ])
 gc = gspread.authorize(credentials)
+
 
 def estrai_dimensioni(testo):
     """
@@ -39,30 +38,23 @@ def estrai_dimensioni(testo):
     else:
         return pd.Series([np.nan, np.nan, np.nan])
     
+
 def correggi_peso(val):
     if pd.isna(val) or str(val).strip() == "":
         return 0.0
     
-    # Se Pandas lo ha già importato come numero, è già corretto
     if isinstance(val, (int, float)):
         return float(val)
     
-    # Se è una stringa (es. "1.500,50 kg"), la ripuliamo
     testo = str(val).strip()
-    
-    # Rimuove qualsiasi lettera o spazio (es. "kg", "g")
     testo = re.sub(r'[a-zA-Z\s]', '', testo)
     
-    # Gestione del formato italiano (es. 1.500,50)
     if '.' in testo and ',' in testo:
-        testo = testo.replace('.', '')     # Rimuove il punto delle migliaia
-        testo = testo.replace(',', '.')    # Trasforma la virgola nel decimale di Python
-    # Se c'è solo la virgola (es. 1500,50)
+        testo = testo.replace('.', '')
+        testo = testo.replace(',', '.')
     elif ',' in testo:
         testo = testo.replace(',', '.')
-    # Se c'è solo il punto, capiamo se sono migliaia
     elif '.' in testo:
-        # Se dopo il punto ci sono esattamente 3 cifre, molto probabilmente sono migliaia (es. "1.500")
         if bool(re.search(r'\.\d{3}$', testo)):
             testo = testo.replace('.', '')
             
@@ -82,7 +74,7 @@ def assegna_CLASSE(row):
     dim_max = dims[2]
     
     peso = row['PESO X AMAZON']
-    peso_vol = row.get('PESO_VOLUMETRICO', 0)
+    peso_vol = row.get('PESO_DIMENSIONALE', 0)
     tabella = row.get('TABELLA')
     
     if tabella == 'B':
@@ -359,59 +351,50 @@ def calcolo_trasporto_sp(df_spese_trasporto, df_costi_A, df_costi_B):
     return df_finale_sp
 
 
-def elabora_costi_logistici(input_path, output_path, bucket_supporto):
+def elabora_costi_logistici(input_path, output_path):
     """
-    Funzione principale. Adesso legge e scrive da percorsi di sistema locali.
+    Funzione principale. Legge l'Excel da locale e i costi da Google Sheets.
     """
     print(f"Caricamento file di input: {input_path}...")
-    df = pd.read_excel(input_path)
-
-    df = pd.read_excel(input_path, header=None)
     
-    # 2. Eliminiamo tutte le righe che sono COMPLETAMENTE vuote (NaN in tutte le celle)
+    # 1. Lettura 'grezza' per ignorare eventuali righe vuote iniziali
+    df = pd.read_excel(input_path, header=None)
     df = df.dropna(how='all')
     
-    # 3. Se il file non è completamente vuoto, promuoviamo la prima riga utile a intestazione
     if not df.empty:
-        # Prende i valori della prima riga sopravvissuta
         nuove_colonne = df.iloc[0] 
-        # Li imposta come nomi delle colonne
         df.columns = nuove_colonne 
-        # Elimina la riga delle intestazioni dal corpo dei dati veri e propri
         df = df.iloc[1:].reset_index(drop=True)
 
-    # =====================================================================
-    # PULIZIA COLONNE: Converte tutto in MAIUSCOLO e rimuove spazi extra
-    # =====================================================================
-    df.columns = df.columns.str.upper()
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.astype(str).str.upper().str.strip()
+    
     print("Estrazione e pulizia delle dimensioni...")
     df[['DIMENSIONE_1', 'DIMENSIONE_2', 'DIMENSIONE_3']] = df['DIMENSIONI'].apply(estrai_dimensioni)
 
     for col in ['DIMENSIONE_1', 'DIMENSIONE_2', 'DIMENSIONE_3']:
         df[col] = df[col].astype(str).str.replace(',', '.').astype(float)
         
-    df["PESO_VOLUMETRICO"] = (df["DIMENSIONE_1"] * df["DIMENSIONE_2"] * df["DIMENSIONE_3"]) / 5
+    df["PESO_DIMENSIONALE"] = (df["DIMENSIONE_1"] * df["DIMENSIONE_2"] * df["DIMENSIONE_3"]) / 5
     
-    # === INIZIO CORREZIONE PESO ===
+    # === CORREZIONE PESO ===
     df["PESO"] = df["PESO"].apply(correggi_peso)
-    # === FINE CORREZIONE PESO ===
     
-    # Ora il max prenderà sempre i valori corretti
-    df["PESO X AMAZON"] = df[["PESO_VOLUMETRICO", "PESO"]].max(axis=1)
-    
-    # =====================================================================
-    # GESTIONE COLONNA "TABELLA"
-    # =====================================================================
     if 'TABELLA' in df.columns:
         df['TABELLA'] = df['TABELLA'].replace(r'^\s*$', np.nan, regex=True).fillna("A")
     else:
         df["TABELLA"] = "A"
 
+    print("Calcolo del PESO X AMAZON (peso di fatturazione)...")
+
+    df["PESO X AMAZON"] = np.where(
+        df["TABELLA"] == 'B',
+        df["PESO_DIMENSIONALE"],
+        df[["PESO_DIMENSIONALE", "PESO"]].max(axis=1)
+    )
+
     print(f"Caricamento tabelle di costo dal Google Sheet ({SPREADSHEET_ID})...")
     try:
         spreadsheet = gc.open_by_key(SPREADSHEET_ID)
-        # Usiamo dropna per ignorare righe/colonne interamente vuote che gspread potrebbe estrarre
         df_fr_sp_A_data = get_as_dataframe(spreadsheet.worksheet("FR_SP_A")).dropna(how='all', axis=0).dropna(how='all', axis=1)
         df_it_de_A_data = get_as_dataframe(spreadsheet.worksheet("IT_DE_A")).dropna(how='all', axis=0).dropna(how='all', axis=1)
         df_fr_sp_B_data = get_as_dataframe(spreadsheet.worksheet("FR_SP_B")).dropna(how='all', axis=0).dropna(how='all', axis=1)
@@ -457,9 +440,6 @@ def elabora_costi_logistici(input_path, output_path, bucket_supporto):
     df = pd.merge(df, df_costi_sp_finali, on=['SKU', 'CLASSE'], how='left')
     df['Trasporto SP'] = df['Trasporto SP'].fillna(0)
 
-    # =====================================================================
-    # PULIZIA FINALE: Rimuove colonne vuote ("UNNAMED: X") e colonne interamente vuote
-    # =====================================================================
     print("Pulizia delle colonne vuote / UNNAMED...")
     colonne_unnamed = [col for col in df.columns if 'UNNAMED' in str(col)]
     if colonne_unnamed:
@@ -469,12 +449,6 @@ def elabora_costi_logistici(input_path, output_path, bucket_supporto):
     df.to_excel(output_path, index=False)
     print("Elaborazione interna completata con successo!")
 
-# ==============================================================================
-# CLOUD FUNCTION ENTRY POINT
-# ==============================================================================
-# ==============================================================================
-# CLOUD FUNCTION ENTRY POINT
-# ==============================================================================
 @functions_framework.cloud_event
 def calcola_spese_trasporto(cloud_event):
     """
@@ -485,14 +459,9 @@ def calcola_spese_trasporto(cloud_event):
     bucket_name = data["bucket"]
     file_name = data["name"]
 
-    # 1. CONTROLLO ANTI-LOOP INFINITO
+    # CONTROLLO ANTI-LOOP INFINITO
     if "_elaborato" in file_name:
         print(f"[{file_name}] è un file elaborato. Salto per evitare loop infiniti.")
-        return
-        
-    # 2. CONTROLLO FILE DI CONFIGURAZIONE STATICI
-    if file_name.startswith("df_costi_"):
-        print(f"[{file_name}] è un file di configurazione statico. Salto l'elaborazione.")
         return
 
     print(f"Nuovo file rilevato: gs://{bucket_name}/{file_name}")
@@ -500,11 +469,6 @@ def calcola_spese_trasporto(cloud_event):
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(file_name)
-
-    # 3. DEFINIZIONE PERCORSI LOCALI E BUCKET SUPPORTO
-    # MODIFICA: Usiamo il nome del bucket estratto dinamicamente dall'evento,
-    # compatibile con i suffissi Prod/Test di Terraform.
-    bucket_supporto = bucket_name 
     
     base_name = os.path.basename(file_name)
     name_without_ext, ext = os.path.splitext(base_name)
@@ -513,19 +477,16 @@ def calcola_spese_trasporto(cloud_event):
     output_gcs_name = file_name.replace(ext, f"_elaborato{ext}")
 
     try:
-        # FASE 1: Scarica il file localmente
+        # Scarica il file localmente
         print(f"Scaricamento del file in {local_input}...")
-        blob.download_to_filename(local_input)
-        
-        # FASE 2: Avvia l'elaborazione usando i percorsi locali e il bucket dinamico
-        elabora_costi_logistici(local_input, local_output, bucket_supporto)
-        
-        # FASE 3: Ricarica il risultato sul bucket
+        blob.download_to_filename(local_input) 
+        # Avvia l'elaborazione usando i percorsi locali
+        elabora_costi_logistici(local_input, local_output)
+        # Ricarica il risultato sul bucket
         print(f"Caricamento del file elaborato come gs://{bucket_name}/{output_gcs_name}...")
         output_blob = bucket.blob(output_gcs_name)
         output_blob.upload_from_filename(local_output)
-        
-        # FASE 4: Elimina il file originale
+        # Elimina il file originale
         print(f"Eliminazione del file originale: {file_name}")
         blob.delete()
         print("Processo terminato con successo.")
