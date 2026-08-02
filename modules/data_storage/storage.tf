@@ -64,7 +64,7 @@ resource "google_storage_bucket" "spese_trasporto" {
     }
     condition {
       age            = 5
-      matches_suffix = ["elaborato.xlsx", ".csv"]
+      matches_suffix = ["elaborato.xlsx", "elaborato.csv"]
     }
   }
 }
@@ -124,15 +124,6 @@ resource "google_storage_bucket" "tf_state" {
       days_since_noncurrent_time = local.is_test ? 7 : 90
     }
   }
-}
-
-resource "google_storage_bucket_object" "file_statici_spese"  {
-  for_each = fileset("${path.module}/../compute_functions/src/file_statici", "*")
-
-  name   = each.value                                
-  bucket = google_storage_bucket.spese_trasporto.name 
-  source = "${path.module}/../compute_functions/src/file_statici/${each.value}"
-  detect_md5hash = filemd5("${path.module}/../compute_functions/src/file_statici/${each.value}")
 }
 
 resource "google_storage_bucket" "bucket_codice_funzioni" {

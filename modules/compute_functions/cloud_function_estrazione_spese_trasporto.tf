@@ -42,9 +42,9 @@ resource "google_cloudfunctions2_function" "function_estrazione_spese_trasporto"
     service_account_email            = var.cloud_worker_sa_email
 
     environment_variables = {
-      DESTINATION_BUCKET = var.bucket_spese_trasporto_name
       PROJECT_ID         = var.project_id
       LOCATION           = var.region
+      SPREADSHEET_ID = "1TYpxmD6H_9v-ZeeOqSZqiHF50cyzj6xpg51zTaTEQWE"
     }
   }
 

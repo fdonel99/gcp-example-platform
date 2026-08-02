@@ -36,6 +36,9 @@ resource "google_cloudfunctions2_function" "function_calcolo_spese_trasporto" {
     available_cpu                    = "1" 
     timeout_seconds                  = 60
     service_account_email            = var.cloud_worker_sa_email
+    environment_variables = {
+      SPREADSHEET_ID = "1TYpxmD6H_9v-ZeeOqSZqiHF50cyzj6xpg51zTaTEQWE"
+    }
   }
 
   event_trigger {

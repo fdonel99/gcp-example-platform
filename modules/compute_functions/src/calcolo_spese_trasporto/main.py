@@ -4,6 +4,19 @@ import numpy as np
 import re
 import os
 from google.cloud import storage
+import google.auth
+import gspread
+from gspread_dataframe import get_as_dataframe
+
+# --- CONFIGURAZIONE GOOGLE SHEETS ---
+SPREADSHEET_ID = os.environ.get('SPREADSHEET_ID', '1TYpxmD6H_9v-ZeeOqSZqiHF50cyzj6xpg51zTaTEQWE')
+
+# Autenticazione nativa di Google Cloud per accedere a Sheets
+credentials, _ = google.auth.default(scopes=[
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
+])
+gc = gspread.authorize(credentials)
 
 def estrai_dimensioni(testo):
     """
@@ -381,11 +394,18 @@ def elabora_costi_logistici(input_path, output_path, bucket_supporto):
     else:
         df["TABELLA"] = "A"
 
-    print(f"Caricamento tabelle di costo CSV dal bucket {bucket_supporto}...")
-    df_fr_sp_A_data = pd.read_csv(f"gs://{bucket_supporto}/df_costi_fr_sp_A.csv")
-    df_it_de_A_data = pd.read_csv(f"gs://{bucket_supporto}/df_costi_it_de_A.csv")
-    df_fr_sp_B_data = pd.read_csv(f"gs://{bucket_supporto}/df_costi_fr_sp_B.csv")
-    df_it_de_B_data = pd.read_csv(f"gs://{bucket_supporto}/df_costi_it_de_B.csv")
+    print(f"Caricamento tabelle di costo dal Google Sheet ({SPREADSHEET_ID})...")
+    try:
+        spreadsheet = gc.open_by_key(SPREADSHEET_ID)
+        # Usiamo dropna per ignorare righe/colonne interamente vuote che gspread potrebbe estrarre
+        df_fr_sp_A_data = get_as_dataframe(spreadsheet.worksheet("FR_SP_A")).dropna(how='all', axis=0).dropna(how='all', axis=1)
+        df_it_de_A_data = get_as_dataframe(spreadsheet.worksheet("IT_DE_A")).dropna(how='all', axis=0).dropna(how='all', axis=1)
+        df_fr_sp_B_data = get_as_dataframe(spreadsheet.worksheet("FR_SP_B")).dropna(how='all', axis=0).dropna(how='all', axis=1)
+        df_it_de_B_data = get_as_dataframe(spreadsheet.worksheet("IT_DE_B")).dropna(how='all', axis=0).dropna(how='all', axis=1)
+        
+    except Exception as e:
+        print(f"Errore durante la lettura da Google Sheets: {e}")
+        raise e
 
     # Assegnazione classi
     print("Assegnazione classe logistica...")

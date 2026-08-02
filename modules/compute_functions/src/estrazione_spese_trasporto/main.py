@@ -18,13 +18,12 @@ from gspread_dataframe import set_with_dataframe
 
 # Inizializzazione Client Cloud Storage
 storage_client = storage.Client()
-DESTINATION_BUCKET_NAME = os.environ.get('DESTINATION_BUCKET')
 PROJECT_ID = os.environ.get('PROJECT_ID')
 VERTEX_LOCATION = 'europe-west4' 
 vertexai.init(project=PROJECT_ID, location=VERTEX_LOCATION)
 
 # ID del Google Sheet di destinazione
-SPREADSHEET_ID = '1TYpxmD6H_9v-ZeeOqSZqiHF50cyzj6xpg51zTaTEQWE'
+SPREADSHEET_ID = os.environ.get('SPREADSHEET_ID', '1TYpxmD6H_9v-ZeeOqSZqiHF50cyzj6xpg51zTaTEQWE')
 
 # Autenticazione nativa di Google Cloud per accedere a Sheets
 credentials, _ = google.auth.default(scopes=[
@@ -34,7 +33,7 @@ credentials, _ = google.auth.default(scopes=[
 gc = gspread.authorize(credentials)
 
 # =====================================================================
-# 1. DEFINIZIONE DEGLI SCHEMI PYDANTIC (Struttura esatta dei 4 CSV)
+# 1. DEFINIZIONE DEGLI SCHEMI PYDANTIC (Struttura esatta dei 4 fogli)
 # =====================================================================
 
 class RigaItDeA(BaseModel):
@@ -134,7 +133,7 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
                 numero = numero * 1000
             
             # Nota: restituiamo il numero come INT (non str) così Google Sheets 
-            # e i file CSV lo capiscono in automatico come valore numerico
+            # lo capisce in automatico come valore numerico
             return int(numero)
         
         return val
@@ -155,7 +154,7 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
 def estrai_tariffe_pdf(cloud_event):
     """
     Attivata automaticamente quando un nuovo PDF viene caricato sul bucket.
-    Estrae i dati tramite Vertex AI, salva i CSV e aggiorna il Google Sheet.
+    Estrae i dati tramite Vertex AI e aggiorna il Google Sheet.
     """
     data = cloud_event.data
     source_bucket_name = data["bucket"]
@@ -167,14 +166,10 @@ def estrai_tariffe_pdf(cloud_event):
         print("Il file non è un PDF. Operazione ignorata.")
         return
 
-    if not DESTINATION_BUCKET_NAME:
-        print("ERRORE: Manca la variabile DESTINATION_BUCKET. Impossibile salvare i CSV.")
-        return
-
-    # Download del PDF
+    # Download del PDF e connessione al bucket
     source_bucket = storage_client.bucket(source_bucket_name)
     
-    # Pulisco il bucket
+    # Pulizia del bucket (mantiene solo l'ultimo file caricato)
     try:
         tutti_i_file = source_bucket.list_blobs()
         for file_esistente in tutti_i_file:
@@ -188,16 +183,14 @@ def estrai_tariffe_pdf(cloud_event):
     blob = source_bucket.blob(file_name)
     pdf_bytes = blob.download_as_bytes()
     
-    # Mappatura: (Pagina, Schema, Nome CSV Base, Nome Foglio Google Sheet)
+    # Mappatura: (Pagina, Schema, Nome Foglio Google Sheet)
     tasks = [
-        (6, TabellaItDeA, "df_costi_it_de_A", "IT_DE_A"),
-        (7, TabellaItDeB, "df_costi_it_de_B", "IT_DE_B"),
-        (10, TabellaFrSpA, "df_costi_fr_sp_A", "FR_SP_A"),
-        (11, TabellaFrSpB, "df_costi_fr_sp_B", "FR_SP_B")
+        (6, TabellaItDeA, "IT_DE_A"),
+        (7, TabellaItDeB, "IT_DE_B"),
+        (10, TabellaFrSpA, "FR_SP_A"),
+        (11, TabellaFrSpB, "FR_SP_B")
     ]
     
-    destination_bucket = storage_client.bucket(DESTINATION_BUCKET_NAME)
-
     # Connessione a Google Sheets
     try:
         spreadsheet = gc.open_by_key(SPREADSHEET_ID)
@@ -205,21 +198,13 @@ def estrai_tariffe_pdf(cloud_event):
         print(f"Errore di accesso al Google Sheet (ID: {SPREADSHEET_ID}): {e}. Controlla i permessi del Service Account.")
         return
 
-    for pagina, schema, nome_csv_base, nome_tab_sheet in tasks:
-        nome_csv = f"{nome_csv_base}.csv"
-        
+    for pagina, schema, nome_tab_sheet in tasks:
         try:
-            print(f"Estrazione pagina {pagina} per {nome_csv_base} / tab {nome_tab_sheet}...")
+            print(f"Estrazione pagina {pagina} per il tab {nome_tab_sheet}...")
             
             df = processa_pagina_pdf(pdf_bytes, pagina, schema)
             
-            # --- AZIONE 1: SCRITTURA SU BUCKET (CSV) ---
-            csv_data = df.to_csv(index=False)
-            out_blob = destination_bucket.blob(nome_csv)
-            out_blob.upload_from_string(csv_data, content_type="text/csv")
-            print(f"✅ CSV salvato: gs://{DESTINATION_BUCKET_NAME}/{nome_csv}")
-
-            # --- AZIONE 2: SCRITTURA SU GOOGLE SHEETS ---
+            # --- SCRITTURA SU GOOGLE SHEETS ---
             try:
                 worksheet = spreadsheet.worksheet(nome_tab_sheet)
             except gspread.exceptions.WorksheetNotFound:
@@ -234,8 +219,6 @@ def estrai_tariffe_pdf(cloud_event):
             print(f"✅ Dati salvati in Google Sheets (Foglio: {nome_tab_sheet})")
             
         except Exception as e:
-            print(f"❌ Errore durante l'elaborazione del task {nome_csv_base} (Pagina {pagina}): {e}")
-            error_blob = destination_bucket.blob(f"ERROR_{nome_csv_base}.txt")
-            error_blob.upload_from_string(f"Errore estrazione: {str(e)}", content_type="text/plain")
+            print(f"❌ Errore durante l'elaborazione del tab {nome_tab_sheet} (Pagina {pagina}): {e}")
 
     print(f"🎉 Elaborazione completata per tutti i listini!")
