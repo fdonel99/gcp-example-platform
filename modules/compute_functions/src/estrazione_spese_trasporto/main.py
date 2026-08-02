@@ -116,7 +116,12 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
     def pulisci_dimensioni(val):
         if pd.isna(val) or val is None:
             return val
-        return str(val).split(':')[0].strip()
+        
+        # re.split divide la stringa quando incontra ':', '≤' o '<'. 
+        # [0] prende solo il primissimo pezzo (es. "Pacco piccolo 1 ")
+        # .strip() rimuove gli spazi vuoti finali (diventa "Pacco piccolo 1")
+        testo_pulito = re.split(r'[:≤<]', str(val))[0]
+        return testo_pulito.strip()
 
     def pulisci_peso(val):
         if pd.isna(val) or val is None:
