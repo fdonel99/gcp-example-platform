@@ -14,7 +14,7 @@ from typing import List, Optional
 # --- Import per Google Sheets ---
 import google.auth
 import gspread
-from gspread_dataframe import set_with_dataframe
+from gspread_dataframe import set_with_dataframe, get_as_dataframe
 
 # Inizializzazione Client Cloud Storage
 storage_client = storage.Client()
@@ -118,8 +118,6 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
             return val
         
         # re.split divide la stringa quando incontra ':', '≤' o '<'. 
-        # [0] prende solo il primissimo pezzo (es. "Pacco piccolo 1 ")
-        # .strip() rimuove gli spazi vuoti finali (diventa "Pacco piccolo 1")
         testo_pulito = re.split(r'[:≤<]', str(val))[0]
         return testo_pulito.strip()
 
@@ -137,8 +135,6 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
             if is_kg:
                 numero = numero * 1000
             
-            # Nota: restituiamo il numero come INT (non str) così Google Sheets 
-            # lo capisce in automatico come valore numerico
             return int(numero)
         
         return val
@@ -178,7 +174,6 @@ def estrai_tariffe_pdf(cloud_event):
     try:
         tutti_i_file = source_bucket.list_blobs()
         for file_esistente in tutti_i_file:
-            # Se il file nel bucket NON è quello appena caricato, distruggilo
             if file_esistente.name != file_name:
                 print(f"🧹 Pulizia: Elimino il vecchio listino '{file_esistente.name}'")
                 file_esistente.delete()
@@ -188,14 +183,6 @@ def estrai_tariffe_pdf(cloud_event):
     blob = source_bucket.blob(file_name)
     pdf_bytes = blob.download_as_bytes()
     
-    # Mappatura: (Pagina, Schema, Nome Foglio Google Sheet)
-    tasks = [
-        (6, TabellaItDeA, "IT_DE_A"),
-        (7, TabellaItDeB, "IT_DE_B"),
-        (10, TabellaFrSpA, "FR_SP_A"),
-        (11, TabellaFrSpB, "FR_SP_B")
-    ]
-    
     # Connessione a Google Sheets
     try:
         spreadsheet = gc.open_by_key(SPREADSHEET_ID)
@@ -203,6 +190,45 @@ def estrai_tariffe_pdf(cloud_event):
         print(f"Errore di accesso al Google Sheet (ID: {SPREADSHEET_ID}): {e}. Controlla i permessi del Service Account.")
         return
 
+    # --- LETTURA DINAMICA DELLE PAGINE DAL FOGLIO 'INDICE' ---
+    try:
+        worksheet_indice = spreadsheet.worksheet("INDICE")
+        # Scarichiamo la tabella eliminando eventuali righe e colonne totalmente vuote
+        df_indice = get_as_dataframe(worksheet_indice).dropna(how='all', axis=0).dropna(how='all', axis=1)
+        
+        # Normalizza i nomi delle colonne (tutto minuscolo e senza spazi extra)
+        df_indice.columns = df_indice.columns.astype(str).str.lower().str.strip()
+        
+        # Funzione di supporto per cercare la pagina corretta in base a Regione e Classe
+        def ottieni_pagina(regione, classe):
+            risultato = df_indice[
+                (df_indice['regione'].astype(str).str.upper() == regione.upper()) &
+                (df_indice['classe'].astype(str).str.upper() == classe.upper())
+            ]
+            if not risultato.empty:
+                return int(risultato['pagina'].iloc[0])
+            raise ValueError(f"Impossibile trovare la pagina per Regione: {regione}, Classe: {classe} nel foglio INDICE.")
+        
+        # Recupera le pagine in modo dinamico
+        pagina_it_de_a = ottieni_pagina("IT_DE", "A")
+        pagina_it_de_b = ottieni_pagina("IT_DE", "B")
+        pagina_fr_sp_a = ottieni_pagina("FR_SP", "A")
+        pagina_fr_sp_b = ottieni_pagina("FR_SP", "B")
+        
+        print(f"Pagine dinamiche estratte: IT_DE_A={pagina_it_de_a}, IT_DE_B={pagina_it_de_b}, FR_SP_A={pagina_fr_sp_a}, FR_SP_B={pagina_fr_sp_b}")
+        
+    except Exception as e:
+        print(f"❌ Errore durante la lettura del foglio 'INDICE': {e}")
+        return
+
+    # Mappatura: (Pagina Dinamica, Schema, Nome Foglio Google Sheet)
+    tasks = [
+        (pagina_it_de_a, TabellaItDeA, "IT_DE_A"),
+        (pagina_it_de_b, TabellaItDeB, "IT_DE_B"),
+        (pagina_fr_sp_a, TabellaFrSpA, "FR_SP_A"),
+        (pagina_fr_sp_b, TabellaFrSpB, "FR_SP_B")
+    ]
+    
     for pagina, schema, nome_tab_sheet in tasks:
         try:
             print(f"Estrazione pagina {pagina} per il tab {nome_tab_sheet}...")
