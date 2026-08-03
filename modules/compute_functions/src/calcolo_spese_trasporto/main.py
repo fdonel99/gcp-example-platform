@@ -24,7 +24,6 @@ def estrai_dimensioni(testo):
     """
     if pd.isna(testo):
         return pd.Series([np.nan, np.nan, np.nan])
-    
     testo_str = str(testo)
     numeri = re.findall(r'\d+(?:,\d+)?', testo_str)
     if len(numeri) >= 3:
@@ -37,18 +36,14 @@ def estrai_dimensioni(testo):
         return pd.Series([numeri[0], np.nan, np.nan])
     else:
         return pd.Series([np.nan, np.nan, np.nan])
-    
 
 def correggi_peso(val):
     if pd.isna(val) or str(val).strip() == "":
         return 0.0
-    
     if isinstance(val, (int, float)):
         return float(val)
-    
     testo = str(val).strip()
     testo = re.sub(r'[a-zA-Z\s]', '', testo)
-    
     if '.' in testo and ',' in testo:
         testo = testo.replace('.', '')
         testo = testo.replace(',', '.')
@@ -57,7 +52,6 @@ def correggi_peso(val):
     elif '.' in testo:
         if bool(re.search(r'\.\d{3}$', testo)):
             testo = testo.replace('.', '')
-            
     try:
         return float(testo)
     except ValueError:
@@ -72,7 +66,6 @@ def assegna_CLASSE(row):
     dim_min = dims[0]
     dim_mid = dims[1]
     dim_max = dims[2]
-    
     peso = row['PESO X AMAZON']
     peso_vol = row.get('PESO_DIMENSIONALE', 0)
     tabella = row.get('TABELLA')
@@ -122,22 +115,21 @@ def assegna_CLASSE(row):
             return "Fuori misura pesante"
         else:
             return "Tipo A - Fuori range / Non classificato"
-            
     return "Tabella sconosciuta"
 
 
 def calcolo_trasporto_it_de(df_spese_trasporto, df_costi_A, df_costi_B):
     gruppo_buste_standard_A = [
-        "Busta leggera", "Busta grande", "Busta standard", 
+        "Busta leggera", "Busta grande", "Busta standard",
         "Busta extra large", "Pacco piccolo", "Pacco standard"
     ]
     gruppo_fuori_misura_A = [
-        "Fuori misura piccolo", "Fuori misura standard leggero", 
-        "Fuori misura standard pesante", "Fuori misura standard grande", 
+        "Fuori misura piccolo", "Fuori misura standard leggero",
+        "Fuori misura standard pesante", "Fuori misura standard grande",
         "Fuori misura ingombrante", "Fuori misura pesante"
     ]
     gruppo_pacchi_B = [
-        "Pacco piccolo 1", "Pacco piccolo 2", "Pacco piccolo 3", 
+        "Pacco piccolo 1", "Pacco piccolo 2", "Pacco piccolo 3",
         "Pacco medio 1", "Pacco medio 2", "Pacco grande 1", "Pacco grande 2"
     ]
 
@@ -154,10 +146,9 @@ def calcolo_trasporto_it_de(df_spese_trasporto, df_costi_A, df_costi_B):
     unmatched_A = df_joined_A[df_joined_A['peso_trasporto'].isna()].copy()
 
     matched_A = matched_A[
-        (matched_A['peso_trasporto'] >= matched_A['PESO X AMAZON']) | 
+        (matched_A['peso_trasporto'] >= matched_A['PESO X AMAZON']) |
         (matched_A['CLASSE'].isin(gruppo_fuori_misura_A))
     ]
-    
     matched_A = matched_A.sort_values(by=['SKU', 'peso_trasporto'])
     matched_A = matched_A.drop_duplicates(subset=['SKU'], keep='first')
 
@@ -168,6 +159,14 @@ def calcolo_trasporto_it_de(df_spese_trasporto, df_costi_A, df_costi_B):
     df_costi_B_ridotto = df_costi_B_clean[colonne_B]
 
     df_joined_B = pd.merge(df_spese_B, df_costi_B_ridotto, on='CLASSE', how='left')
+    
+    # FIX: De-duplicazione per la Tabella B
+    matched_B = df_joined_B[df_joined_B['peso_trasporto'].notna()].copy()
+    unmatched_B = df_joined_B[df_joined_B['peso_trasporto'].isna()].copy()
+    matched_B = matched_B[matched_B['peso_trasporto'] >= matched_B['PESO X AMAZON']]
+    matched_B = matched_B.sort_values(by=['SKU', 'peso_trasporto'])
+    matched_B = matched_B.drop_duplicates(subset=['SKU'], keep='first')
+    df_joined_B = pd.concat([matched_B, unmatched_B], ignore_index=True)
 
     colonne_da_azzerare = ['peso_trasporto', 'IT_EUR', 'incremento_IT_EUR', 'DE_EUR', 'incremento_DE_EUR']
     df_joined_A_filtered[colonne_da_azzerare] = df_joined_A_filtered[colonne_da_azzerare].fillna(0)
@@ -175,9 +174,10 @@ def calcolo_trasporto_it_de(df_spese_trasporto, df_costi_A, df_costi_B):
 
     df_finale = pd.concat([df_joined_A_filtered, df_joined_B], ignore_index=True)
     
+    # FIX: Calcolo degli scatti di peso corretti (100g e 1kg)
     differenza_grammi = df_finale['PESO X AMAZON'] - df_finale['peso_trasporto']
-    df_finale['peso_excess'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 1000), 0)
-    df_finale['peso_excess_grammi'] = df_finale['peso_excess'] * 1000
+    df_finale['scatti_kg'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 1000), 0)
+    df_finale['scatti_100g'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 100), 0)
 
     condizioni = [
         df_finale['CLASSE'].isin(gruppo_buste_standard_A),
@@ -187,14 +187,13 @@ def calcolo_trasporto_it_de(df_spese_trasporto, df_costi_A, df_costi_B):
 
     calcoli_it = [
         df_finale['IT_EUR'],
-        df_finale['IT_EUR'] + (df_finale['peso_excess'] * df_finale['incremento_IT_EUR']),
-        df_finale['IT_EUR'] + (df_finale['peso_excess_grammi'] * df_finale['incremento_IT_EUR'])
+        df_finale['IT_EUR'] + (df_finale['scatti_kg'] * df_finale['incremento_IT_EUR']),
+        df_finale['IT_EUR'] + (df_finale['scatti_100g'] * df_finale['incremento_IT_EUR'])
     ]
-    
     calcoli_de = [
         df_finale['DE_EUR'],
-        df_finale['DE_EUR'] + (df_finale['peso_excess'] * df_finale['incremento_DE_EUR']),
-        df_finale['DE_EUR'] + (df_finale['peso_excess_grammi'] * df_finale['incremento_DE_EUR'])
+        df_finale['DE_EUR'] + (df_finale['scatti_kg'] * df_finale['incremento_DE_EUR']),
+        df_finale['DE_EUR'] + (df_finale['scatti_100g'] * df_finale['incremento_DE_EUR'])
     ]
 
     df_finale['Trasporto IT'] = np.select(condizioni, calcoli_it, default=0)
@@ -206,16 +205,16 @@ def calcolo_trasporto_it_de(df_spese_trasporto, df_costi_A, df_costi_B):
 
 def calcolo_trasporto_fr(df_spese_trasporto, df_costi_A, df_costi_B):
     gruppo_buste_standard_A = [
-        "Busta leggera", "Busta grande", "Busta standard", 
+        "Busta leggera", "Busta grande", "Busta standard",
         "Busta extra large", "Pacco piccolo", "Pacco standard"
     ]
     gruppo_fuori_misura_A = [
-        "Fuori misura piccolo", "Fuori misura standard leggero", 
-        "Fuori misura standard pesante", "Fuori misura standard grande", 
+        "Fuori misura piccolo", "Fuori misura standard leggero",
+        "Fuori misura standard pesante", "Fuori misura standard grande",
         "Fuori misura ingombrante", "Fuori misura pesante"
     ]
     gruppo_pacchi_B = [
-        "Pacco piccolo 1", "Pacco piccolo 2", "Pacco piccolo 3", 
+        "Pacco piccolo 1", "Pacco piccolo 2", "Pacco piccolo 3",
         "Pacco medio 1", "Pacco medio 2", "Pacco grande 1", "Pacco grande 2"
     ]
 
@@ -227,15 +226,13 @@ def calcolo_trasporto_fr(df_spese_trasporto, df_costi_A, df_costi_B):
     df_costi_A_ridotto = df_costi_A_clean[colonne_A]
 
     df_joined_A = pd.merge(df_spese_A, df_costi_A_ridotto, on='CLASSE', how='left')
-    
     matched_A = df_joined_A[df_joined_A['peso_trasporto'].notna()].copy()
     unmatched_A = df_joined_A[df_joined_A['peso_trasporto'].isna()].copy()
 
     matched_A = matched_A[
-        (matched_A['peso_trasporto'] >= matched_A['PESO X AMAZON']) | 
+        (matched_A['peso_trasporto'] >= matched_A['PESO X AMAZON']) |
         (matched_A['CLASSE'].isin(gruppo_fuori_misura_A))
     ]
-    
     matched_A = matched_A.sort_values(by=['SKU', 'peso_trasporto'])
     matched_A = matched_A.drop_duplicates(subset=['SKU'], keep='first')
 
@@ -250,16 +247,26 @@ def calcolo_trasporto_fr(df_spese_trasporto, df_costi_A, df_costi_B):
     df_costi_B_ridotto = df_costi_B_clean[colonne_B]
 
     df_joined_B = pd.merge(df_spese_B, df_costi_B_ridotto, on='CLASSE', how='left')
+    
+    # FIX: De-duplicazione per la Tabella B
+    matched_B = df_joined_B[df_joined_B['peso_trasporto'].notna()].copy()
+    unmatched_B = df_joined_B[df_joined_B['peso_trasporto'].isna()].copy()
+    matched_B = matched_B[matched_B['peso_trasporto'] >= matched_B['PESO X AMAZON']]
+    matched_B = matched_B.sort_values(by=['SKU', 'peso_trasporto'])
+    matched_B = matched_B.drop_duplicates(subset=['SKU'], keep='first')
+    df_joined_B = pd.concat([matched_B, unmatched_B], ignore_index=True)
+    
     colonne_da_azzerare = ['peso_trasporto', 'FR_EUR', 'incremento_FR_EUR']
     df_joined_A_filtered[colonne_da_azzerare] = df_joined_A_filtered[colonne_da_azzerare].fillna(0)
     df_joined_B[colonne_da_azzerare] = df_joined_B[colonne_da_azzerare].fillna(0)
 
     df_finale_fr = pd.concat([df_joined_A_filtered, df_joined_B], ignore_index=True)
-    differenza_grammi = df_finale_fr['PESO X AMAZON'] - df_finale_fr['peso_trasporto']
-
-    df_finale_fr['peso_excess'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 1000), 0)
-    df_finale_fr['peso_excess_grammi'] = df_finale_fr['peso_excess'] * 1000
     
+    # FIX: Calcolo degli scatti di peso corretti (100g e 1kg)
+    differenza_grammi = df_finale_fr['PESO X AMAZON'] - df_finale_fr['peso_trasporto']
+    df_finale_fr['scatti_kg'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 1000), 0)
+    df_finale_fr['scatti_100g'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 100), 0)
+
     condizioni = [
         df_finale_fr['CLASSE'].isin(gruppo_buste_standard_A),
         df_finale_fr['CLASSE'].isin(gruppo_fuori_misura_A),
@@ -267,9 +274,9 @@ def calcolo_trasporto_fr(df_spese_trasporto, df_costi_A, df_costi_B):
     ]
 
     calcoli_fr = [
-        df_finale_fr['FR_EUR'],                                                                           
-        df_finale_fr['FR_EUR'] + (df_finale_fr['peso_excess'] * df_finale_fr['incremento_FR_EUR']),       
-        df_finale_fr['FR_EUR'] + (df_finale_fr['peso_excess_grammi'] * df_finale_fr['incremento_FR_EUR']) 
+        df_finale_fr['FR_EUR'],
+        df_finale_fr['FR_EUR'] + (df_finale_fr['scatti_kg'] * df_finale_fr['incremento_FR_EUR']),
+        df_finale_fr['FR_EUR'] + (df_finale_fr['scatti_100g'] * df_finale_fr['incremento_FR_EUR'])
     ]
 
     df_finale_fr['Trasporto FR'] = np.select(condizioni, calcoli_fr, default=0)
@@ -279,16 +286,16 @@ def calcolo_trasporto_fr(df_spese_trasporto, df_costi_A, df_costi_B):
 
 def calcolo_trasporto_sp(df_spese_trasporto, df_costi_A, df_costi_B):
     gruppo_buste_standard_A = [
-        "Busta leggera", "Busta grande", "Busta standard", 
+        "Busta leggera", "Busta grande", "Busta standard",
         "Busta extra large", "Pacco piccolo", "Pacco standard"
     ]
     gruppo_fuori_misura_A = [
-        "Fuori misura piccolo", "Fuori misura standard leggero", 
-        "Fuori misura standard pesante", "Fuori misura standard grande", 
+        "Fuori misura piccolo", "Fuori misura standard leggero",
+        "Fuori misura standard pesante", "Fuori misura standard grande",
         "Fuori misura ingombrante", "Fuori misura pesante"
     ]
     gruppo_pacchi_B = [
-        "Pacco piccolo 1", "Pacco piccolo 2", "Pacco piccolo 3", 
+        "Pacco piccolo 1", "Pacco piccolo 2", "Pacco piccolo 3",
         "Pacco medio 1", "Pacco medio 2", "Pacco grande 1", "Pacco grande 2"
     ]
 
@@ -300,15 +307,13 @@ def calcolo_trasporto_sp(df_spese_trasporto, df_costi_A, df_costi_B):
     df_costi_A_ridotto = df_costi_A_clean[colonne_A]
 
     df_joined_A = pd.merge(df_spese_A, df_costi_A_ridotto, on='CLASSE', how='left')
-    
     matched_A = df_joined_A[df_joined_A['peso_trasporto'].notna()].copy()
     unmatched_A = df_joined_A[df_joined_A['peso_trasporto'].isna()].copy()
 
     matched_A = matched_A[
-        (matched_A['peso_trasporto'] >= matched_A['PESO X AMAZON']) | 
+        (matched_A['peso_trasporto'] >= matched_A['PESO X AMAZON']) |
         (matched_A['CLASSE'].isin(gruppo_fuori_misura_A))
     ]
-    
     matched_A = matched_A.sort_values(by=['SKU', 'peso_trasporto'])
     matched_A = matched_A.drop_duplicates(subset=['SKU'], keep='first')
 
@@ -323,17 +328,26 @@ def calcolo_trasporto_sp(df_spese_trasporto, df_costi_A, df_costi_B):
     df_costi_B_ridotto = df_costi_B_clean[colonne_B]
 
     df_joined_B = pd.merge(df_spese_B, df_costi_B_ridotto, on='CLASSE', how='left')
+    
+    # FIX: De-duplicazione per la Tabella B
+    matched_B = df_joined_B[df_joined_B['peso_trasporto'].notna()].copy()
+    unmatched_B = df_joined_B[df_joined_B['peso_trasporto'].isna()].copy()
+    matched_B = matched_B[matched_B['peso_trasporto'] >= matched_B['PESO X AMAZON']]
+    matched_B = matched_B.sort_values(by=['SKU', 'peso_trasporto'])
+    matched_B = matched_B.drop_duplicates(subset=['SKU'], keep='first')
+    df_joined_B = pd.concat([matched_B, unmatched_B], ignore_index=True)
 
     colonne_da_azzerare = ['peso_trasporto', 'ES_EUR', 'incremento_ES_EUR']
     df_joined_A_filtered[colonne_da_azzerare] = df_joined_A_filtered[colonne_da_azzerare].fillna(0)
     df_joined_B[colonne_da_azzerare] = df_joined_B[colonne_da_azzerare].fillna(0)
 
     df_finale_sp = pd.concat([df_joined_A_filtered, df_joined_B], ignore_index=True)
+    
+    # FIX: Calcolo degli scatti di peso corretti (100g e 1kg)
     differenza_grammi = df_finale_sp['PESO X AMAZON'] - df_finale_sp['peso_trasporto']
-    
-    df_finale_sp['peso_excess'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 1000), 0)
-    df_finale_sp['peso_excess_grammi'] = df_finale_sp['peso_excess'] * 1000
-    
+    df_finale_sp['scatti_kg'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 1000), 0)
+    df_finale_sp['scatti_100g'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 100), 0)
+
     condizioni = [
         df_finale_sp['CLASSE'].isin(gruppo_buste_standard_A),
         df_finale_sp['CLASSE'].isin(gruppo_fuori_misura_A),
@@ -341,9 +355,9 @@ def calcolo_trasporto_sp(df_spese_trasporto, df_costi_A, df_costi_B):
     ]
 
     calcoli_sp = [
-        df_finale_sp['ES_EUR'],                                                                       
-        df_finale_sp['ES_EUR'] + (df_finale_sp['peso_excess'] * df_finale_sp['incremento_ES_EUR']),       
-        df_finale_sp['ES_EUR'] + (df_finale_sp['peso_excess_grammi'] * df_finale_sp['incremento_ES_EUR'])  
+        df_finale_sp['ES_EUR'],
+        df_finale_sp['ES_EUR'] + (df_finale_sp['scatti_kg'] * df_finale_sp['incremento_ES_EUR']),
+        df_finale_sp['ES_EUR'] + (df_finale_sp['scatti_100g'] * df_finale_sp['incremento_ES_EUR'])
     ]
 
     df_finale_sp['Trasporto SP'] = np.select(condizioni, calcoli_sp, default=0)
@@ -356,36 +370,31 @@ def elabora_costi_logistici(input_path, output_path):
     Funzione principale. Legge l'Excel da locale e i costi da Google Sheets.
     """
     print(f"Caricamento file di input: {input_path}...")
-    
     # 1. Lettura 'grezza' per ignorare eventuali righe vuote iniziali
     df = pd.read_excel(input_path, header=None)
     df = df.dropna(how='all')
-    
     if not df.empty:
-        nuove_colonne = df.iloc[0] 
-        df.columns = nuove_colonne 
+        nuove_colonne = df.iloc[0]
+        df.columns = nuove_colonne
         df = df.iloc[1:].reset_index(drop=True)
 
     df.columns = df.columns.astype(str).str.upper().str.strip()
-    
     print("Estrazione e pulizia delle dimensioni...")
     df[['DIMENSIONE_1', 'DIMENSIONE_2', 'DIMENSIONE_3']] = df['DIMENSIONI'].apply(estrai_dimensioni)
 
     for col in ['DIMENSIONE_1', 'DIMENSIONE_2', 'DIMENSIONE_3']:
         df[col] = df[col].astype(str).str.replace(',', '.').astype(float)
-        
+    
     df["PESO_DIMENSIONALE"] = (df["DIMENSIONE_1"] * df["DIMENSIONE_2"] * df["DIMENSIONE_3"]) / 5
     
     # === CORREZIONE PESO ===
     df["PESO"] = df["PESO"].apply(correggi_peso)
-    
     if 'TABELLA' in df.columns:
         df['TABELLA'] = df['TABELLA'].replace(r'^\s*$', np.nan, regex=True).fillna("A")
     else:
         df["TABELLA"] = "A"
 
     print("Calcolo del PESO X AMAZON (peso di fatturazione)...")
-
     df["PESO X AMAZON"] = np.where(
         df["TABELLA"] == 'B',
         df["PESO_DIMENSIONALE"],
@@ -399,7 +408,6 @@ def elabora_costi_logistici(input_path, output_path):
         df_it_de_A_data = get_as_dataframe(spreadsheet.worksheet("IT_DE_A")).dropna(how='all', axis=0).dropna(how='all', axis=1)
         df_fr_sp_B_data = get_as_dataframe(spreadsheet.worksheet("FR_SP_B")).dropna(how='all', axis=0).dropna(how='all', axis=1)
         df_it_de_B_data = get_as_dataframe(spreadsheet.worksheet("IT_DE_B")).dropna(how='all', axis=0).dropna(how='all', axis=1)
-        
     except Exception as e:
         print(f"Errore durante la lettura da Google Sheets: {e}")
         raise e
@@ -444,6 +452,7 @@ def elabora_costi_logistici(input_path, output_path):
     colonne_unnamed = [col for col in df.columns if 'UNNAMED' in str(col)]
     if colonne_unnamed:
         df = df.drop(columns=colonne_unnamed)
+    
     df = df.dropna(axis=1, how='all')
     print(f"Salvataggio del file elaborato in: {output_path}")
     df.to_excel(output_path, index=False)
@@ -469,7 +478,6 @@ def calcola_spese_trasporto(cloud_event):
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(file_name)
-    
     base_name = os.path.basename(file_name)
     name_without_ext, ext = os.path.splitext(base_name)
     local_input = f"/tmp/{base_name}"
@@ -479,13 +487,16 @@ def calcola_spese_trasporto(cloud_event):
     try:
         # Scarica il file localmente
         print(f"Scaricamento del file in {local_input}...")
-        blob.download_to_filename(local_input) 
+        blob.download_to_filename(local_input)
+        
         # Avvia l'elaborazione usando i percorsi locali
         elabora_costi_logistici(local_input, local_output)
+        
         # Ricarica il risultato sul bucket
         print(f"Caricamento del file elaborato come gs://{bucket_name}/{output_gcs_name}...")
         output_blob = bucket.blob(output_gcs_name)
         output_blob.upload_from_filename(local_output)
+        
         # Elimina il file originale
         print(f"Eliminazione del file originale: {file_name}")
         blob.delete()
