@@ -136,6 +136,7 @@ def calcolo_trasporto_it_de(df_spese_trasporto, df_costi_A, df_costi_B):
     df_spese_A = df_spese_trasporto[df_spese_trasporto['TABELLA'] == 'A'].copy()
     df_spese_B = df_spese_trasporto[df_spese_trasporto['TABELLA'] == 'B'].copy()
 
+    # --- LOGICA TABELLA A ---
     df_costi_A_clean = df_costi_A.rename(columns={'dimensioni': 'CLASSE', 'peso': 'peso_trasporto'})
     colonne_A = ['CLASSE', 'peso_trasporto', 'IT_EUR', 'incremento_IT_EUR', 'DE_EUR', 'incremento_DE_EUR']
     df_costi_A_ridotto = df_costi_A_clean[colonne_A]
@@ -145,6 +146,7 @@ def calcolo_trasporto_it_de(df_spese_trasporto, df_costi_A, df_costi_B):
     matched_A = df_joined_A[df_joined_A['peso_trasporto'].notna()].copy()
     unmatched_A = df_joined_A[df_joined_A['peso_trasporto'].isna()].copy()
 
+    # Filtro Tabella A: Tieni gli scaglioni di peso adeguati
     matched_A = matched_A[
         (matched_A['peso_trasporto'] >= matched_A['PESO X AMAZON']) |
         (matched_A['CLASSE'].isin(gruppo_fuori_misura_A))
@@ -154,27 +156,28 @@ def calcolo_trasporto_it_de(df_spese_trasporto, df_costi_A, df_costi_B):
 
     df_joined_A_filtered = pd.concat([matched_A, unmatched_A], ignore_index=True)
 
+    # --- LOGICA TABELLA B ---
     df_costi_B_clean = df_costi_B.rename(columns={'dimensioni': 'CLASSE', 'peso': 'peso_trasporto'})
     colonne_B = ['CLASSE', 'peso_trasporto', 'IT_EUR', 'incremento_IT_EUR', 'DE_EUR', 'incremento_DE_EUR']
     df_costi_B_ridotto = df_costi_B_clean[colonne_B]
 
     df_joined_B = pd.merge(df_spese_B, df_costi_B_ridotto, on='CLASSE', how='left')
     
-    # FIX: De-duplicazione per la Tabella B
+    # De-duplicazione Tabella B (Senza filtro peso_trasporto >= PESO_AMAZON)
     matched_B = df_joined_B[df_joined_B['peso_trasporto'].notna()].copy()
     unmatched_B = df_joined_B[df_joined_B['peso_trasporto'].isna()].copy()
-    matched_B = matched_B[matched_B['peso_trasporto'] >= matched_B['PESO X AMAZON']]
+    
     matched_B = matched_B.sort_values(by=['SKU', 'peso_trasporto'])
     matched_B = matched_B.drop_duplicates(subset=['SKU'], keep='first')
     df_joined_B = pd.concat([matched_B, unmatched_B], ignore_index=True)
 
+    # --- UNIONE E CALCOLO ---
     colonne_da_azzerare = ['peso_trasporto', 'IT_EUR', 'incremento_IT_EUR', 'DE_EUR', 'incremento_DE_EUR']
     df_joined_A_filtered[colonne_da_azzerare] = df_joined_A_filtered[colonne_da_azzerare].fillna(0)
     df_joined_B[colonne_da_azzerare] = df_joined_B[colonne_da_azzerare].fillna(0)
 
     df_finale = pd.concat([df_joined_A_filtered, df_joined_B], ignore_index=True)
     
-    # FIX: Calcolo degli scatti di peso corretti (100g e 1kg)
     differenza_grammi = df_finale['PESO X AMAZON'] - df_finale['peso_trasporto']
     df_finale['scatti_kg'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 1000), 0)
     df_finale['scatti_100g'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 100), 0)
@@ -221,6 +224,7 @@ def calcolo_trasporto_fr(df_spese_trasporto, df_costi_A, df_costi_B):
     df_spese_A = df_spese_trasporto[df_spese_trasporto['TABELLA'] == 'A'].copy()
     df_spese_B = df_spese_trasporto[df_spese_trasporto['TABELLA'] == 'B'].copy()
 
+    # --- LOGICA TABELLA A ---
     df_costi_A_clean = df_costi_A.rename(columns={'dimensioni': 'CLASSE', 'peso': 'peso_trasporto'})
     colonne_A = ['CLASSE', 'peso_trasporto', 'CEP_IT_ES_FR_EUR', 'incremento_CEP_IT_ES_FR_EUR']
     df_costi_A_ridotto = df_costi_A_clean[colonne_A]
@@ -242,27 +246,27 @@ def calcolo_trasporto_fr(df_spese_trasporto, df_costi_A, df_costi_B):
         'incremento_CEP_IT_ES_FR_EUR': 'incremento_FR_EUR'
     })
 
+    # --- LOGICA TABELLA B ---
     df_costi_B_clean = df_costi_B.rename(columns={'dimensioni': 'CLASSE', 'peso': 'peso_trasporto'})
     colonne_B = ['CLASSE', 'peso_trasporto', 'FR_EUR', 'incremento_FR_EUR']
     df_costi_B_ridotto = df_costi_B_clean[colonne_B]
 
     df_joined_B = pd.merge(df_spese_B, df_costi_B_ridotto, on='CLASSE', how='left')
     
-    # FIX: De-duplicazione per la Tabella B
     matched_B = df_joined_B[df_joined_B['peso_trasporto'].notna()].copy()
     unmatched_B = df_joined_B[df_joined_B['peso_trasporto'].isna()].copy()
-    matched_B = matched_B[matched_B['peso_trasporto'] >= matched_B['PESO X AMAZON']]
+    
     matched_B = matched_B.sort_values(by=['SKU', 'peso_trasporto'])
     matched_B = matched_B.drop_duplicates(subset=['SKU'], keep='first')
     df_joined_B = pd.concat([matched_B, unmatched_B], ignore_index=True)
     
+    # --- UNIONE E CALCOLO ---
     colonne_da_azzerare = ['peso_trasporto', 'FR_EUR', 'incremento_FR_EUR']
     df_joined_A_filtered[colonne_da_azzerare] = df_joined_A_filtered[colonne_da_azzerare].fillna(0)
     df_joined_B[colonne_da_azzerare] = df_joined_B[colonne_da_azzerare].fillna(0)
 
     df_finale_fr = pd.concat([df_joined_A_filtered, df_joined_B], ignore_index=True)
     
-    # FIX: Calcolo degli scatti di peso corretti (100g e 1kg)
     differenza_grammi = df_finale_fr['PESO X AMAZON'] - df_finale_fr['peso_trasporto']
     df_finale_fr['scatti_kg'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 1000), 0)
     df_finale_fr['scatti_100g'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 100), 0)
@@ -302,6 +306,7 @@ def calcolo_trasporto_sp(df_spese_trasporto, df_costi_A, df_costi_B):
     df_spese_A = df_spese_trasporto[df_spese_trasporto['TABELLA'] == 'A'].copy()
     df_spese_B = df_spese_trasporto[df_spese_trasporto['TABELLA'] == 'B'].copy()
 
+    # --- LOGICA TABELLA A ---
     df_costi_A_clean = df_costi_A.rename(columns={'dimensioni': 'CLASSE', 'peso': 'peso_trasporto'})
     colonne_A = ['CLASSE', 'peso_trasporto', 'CEP_IT_ES_FR_EUR', 'incremento_CEP_IT_ES_FR_EUR']
     df_costi_A_ridotto = df_costi_A_clean[colonne_A]
@@ -323,27 +328,27 @@ def calcolo_trasporto_sp(df_spese_trasporto, df_costi_A, df_costi_B):
         'incremento_CEP_IT_ES_FR_EUR': 'incremento_ES_EUR'
     })
 
+    # --- LOGICA TABELLA B ---
     df_costi_B_clean = df_costi_B.rename(columns={'dimensioni': 'CLASSE', 'peso': 'peso_trasporto'})
     colonne_B = ['CLASSE', 'peso_trasporto', 'ES_EUR', 'incremento_ES_EUR']
     df_costi_B_ridotto = df_costi_B_clean[colonne_B]
 
     df_joined_B = pd.merge(df_spese_B, df_costi_B_ridotto, on='CLASSE', how='left')
     
-    # FIX: De-duplicazione per la Tabella B
     matched_B = df_joined_B[df_joined_B['peso_trasporto'].notna()].copy()
     unmatched_B = df_joined_B[df_joined_B['peso_trasporto'].isna()].copy()
-    matched_B = matched_B[matched_B['peso_trasporto'] >= matched_B['PESO X AMAZON']]
+    
     matched_B = matched_B.sort_values(by=['SKU', 'peso_trasporto'])
     matched_B = matched_B.drop_duplicates(subset=['SKU'], keep='first')
     df_joined_B = pd.concat([matched_B, unmatched_B], ignore_index=True)
 
+    # --- UNIONE E CALCOLO ---
     colonne_da_azzerare = ['peso_trasporto', 'ES_EUR', 'incremento_ES_EUR']
     df_joined_A_filtered[colonne_da_azzerare] = df_joined_A_filtered[colonne_da_azzerare].fillna(0)
     df_joined_B[colonne_da_azzerare] = df_joined_B[colonne_da_azzerare].fillna(0)
 
     df_finale_sp = pd.concat([df_joined_A_filtered, df_joined_B], ignore_index=True)
     
-    # FIX: Calcolo degli scatti di peso corretti (100g e 1kg)
     differenza_grammi = df_finale_sp['PESO X AMAZON'] - df_finale_sp['peso_trasporto']
     df_finale_sp['scatti_kg'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 1000), 0)
     df_finale_sp['scatti_100g'] = np.where(differenza_grammi > 0, np.ceil(differenza_grammi / 100), 0)
