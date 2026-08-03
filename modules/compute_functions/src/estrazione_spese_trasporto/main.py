@@ -97,6 +97,9 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
     3. Converti le virgole in punti decimali ('2,50' -> 2.50).
     4. Cerca di associare le fasce incrementali alle fasce di peso base corrispondenti per restituire un record omogeneo.
     5. Se un dato non è applicabile o manca, restituisci null.
+    6. CORREZIONE ERRORI DEL PDF (MOLTO IMPORTANTE): 
+       - Amazon ha commesso un errore di battitura: la riga con dimensioni (40 x 30 x 6 cm) è chiamata erroneamente "Pacco piccolo 1". Tu DEVI rinominarla in "Pacco medio 1".
+       - Il simbolo '≤' attaccato ai numeri a volte viene letto male (es. '1≤' letto come '1s' o '1a'). Ignora queste lettere finali fantasma e restituisci solo il nome corretto della classe (es. "Pacco piccolo 3", "Pacco grande 2").
     """
     
     model = GenerativeModel("gemini-2.5-pro")
