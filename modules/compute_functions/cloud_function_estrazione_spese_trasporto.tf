@@ -1,15 +1,8 @@
-# ==============================================================================
-# ESTRAZIONE SPESE TRASPORTO (PDF -> OCR -> CSV)
-# ==============================================================================
-
-# 1. Puntiamo alla nuova cartella
 data "archive_file" "zip_estrazione_spese_trasporto"  {
   type        = "zip"
   source_dir  = "${path.module}/src/estrazione_spese_trasporto" 
   output_path = "${path.module}/src/estrazione_spese_trasporto.zip"
 }
-
-# 2. Aggiorniamo i nomi delle risorse Terraform
 resource "google_storage_bucket_object" "upload_zip_estrazione_spese_trasporto" {
   name   = "estrazione_spese_trasporto_${data.archive_file.zip_estrazione_spese_trasporto.output_md5}.zip"
   bucket = var.bucket_codice_funzioni_name
@@ -18,12 +11,14 @@ resource "google_storage_bucket_object" "upload_zip_estrazione_spese_trasporto" 
 
 resource "google_cloudfunctions2_function" "function_estrazione_spese_trasporto" {
   project     = var.project_id
-  name        = "estrazione-spese-trasporto-fn-${var.environment}" # <-- Nuovo nome Cloud Function
+  name        = "estrazione-spese-trasporto-fn-${var.environment}" 
   location    = var.region
-  
+    labels = {
+    scopo       = "fn-estrazione-listino-trasporto"
+  }
   build_config {
     runtime     = "python311"
-    entry_point = "estrai_tariffe_pdf" # <-- DEVE COMBACIARE CON IL DEF IN MAIN.PY
+    entry_point = "estrai_tariffe_pdf"
     
     source {
       storage_source {

@@ -13,24 +13,18 @@ import html
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-# ==========================================
-# CONFIGURAZIONE CLOUD (Dinamica)
-# ==========================================
 PROJECT_ID = os.environ.get("PROJECT_ID", "cloud-platform-northstar")
 REGION = os.environ.get("REGION", "europe-west1")
 OUTPUT_BUCKET_NAME = os.environ.get("OUTPUT_BUCKET_NAME", "bkt-infografica-output")
 
-# Inizializza i client
 storage_client = storage.Client()
 vision_client = vision.ImageAnnotatorClient()
-
-# Inizializza Vertex AI per Gemini
 vertexai.init(project=PROJECT_ID, location=REGION)
-gemini_model = GenerativeModel("gemini-2.5-flash")
+gemini_model = GenerativeModel(
+    "gemini-2.5-flash",
+    labels={"scopo": "traduzione-infografiche"}
+    )
 
-# ==========================================
-# GESTORE LOG PER IL BUCKET
-# ==========================================
 class BucketLogger:
     def __init__(self):
         self.logs = []
@@ -43,8 +37,6 @@ class BucketLogger:
         
     def get_testo_completo(self):
         return "\n".join(self.logs)
-
-# ==========================================
 
 def estrai_testo_da_paragrafo(paragraph):
     testo = ""

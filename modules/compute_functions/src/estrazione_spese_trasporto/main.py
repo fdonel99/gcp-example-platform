@@ -10,8 +10,6 @@ import vertexai
 from vertexai.generative_models import GenerativeModel, Part, GenerationConfig
 from pydantic import BaseModel
 from typing import List, Optional
-
-# --- Import per Google Sheets ---
 import google.auth
 import gspread
 from gspread_dataframe import set_with_dataframe, get_as_dataframe
@@ -21,11 +19,9 @@ storage_client = storage.Client()
 PROJECT_ID = os.environ.get('PROJECT_ID')
 VERTEX_LOCATION = 'europe-west4' 
 vertexai.init(project=PROJECT_ID, location=VERTEX_LOCATION)
-
-# ID del Google Sheet di destinazione
 SPREADSHEET_ID = os.environ.get('SPREADSHEET_ID', '1TYpxmD6H_9v-ZeeOqSZqiHF50cyzj6xpg51zTaTEQWE')
 
-# Autenticazione nativa di Google Cloud per accedere a Sheets
+# Autenticazione in Google Cloud per accedere a Sheets
 credentials, _ = google.auth.default(scopes=[
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
@@ -71,7 +67,6 @@ class TabellaFrSpB(BaseModel): righe: List[RigaFrSpB]
 def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
     """Ritaglia la singola pagina e usa Gemini nativo per i PDF."""
     
-    # Ritaglia solo la pagina specifica dal PDF
     reader = PdfReader(io.BytesIO(pdf_bytes))
     writer = PdfWriter()
     writer.add_page(reader.pages[numero_pagina - 1])
@@ -79,8 +74,6 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
     single_page_stream = io.BytesIO()
     writer.write(single_page_stream)
     single_page_stream.seek(0)
-    
-    # Invia il PDF nativamente a Gemini
     pdf_part = Part.from_data(data=single_page_stream.read(), mime_type="application/pdf")
     
     schema_json = json.dumps(pydantic_schema.model_json_schema(), indent=2)
@@ -102,7 +95,10 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
        - Il simbolo '≤' attaccato ai numeri a volte viene letto male (es. '1≤' letto come '1s' o '1a'). Ignora queste lettere finali fantasma e restituisci solo il nome corretto della classe (es. "Pacco piccolo 3", "Pacco grande 2").
     """
     
-    model = GenerativeModel("gemini-2.5-pro")
+    model = GenerativeModel(
+        "gemini-2.5-pro",
+        labels={"scopo": "estrazione-tariffe-pdf"}
+        )
     
     response = model.generate_content(
         [pdf_part, prompt],
@@ -115,12 +111,10 @@ def processa_pagina_pdf(pdf_bytes, numero_pagina, pydantic_schema):
     dati_json = json.loads(response.text)
     df = pd.DataFrame(dati_json["righe"])
 
-    # --- INIZIO POST-PROCESSING PANDAS ---
     def pulisci_dimensioni(val):
         if pd.isna(val) or val is None:
             return val
         
-        # re.split divide la stringa quando incontra ':', '≤' o '<'. 
         testo_pulito = re.split(r'[:≤<]', str(val))[0]
         return testo_pulito.strip()
 
@@ -170,7 +164,6 @@ def estrai_tariffe_pdf(cloud_event):
         print("Il file non è un PDF. Operazione ignorata.")
         return
 
-    # Download del PDF e connessione al bucket
     source_bucket = storage_client.bucket(source_bucket_name)
     
     # Pulizia del bucket (mantiene solo l'ultimo file caricato)
@@ -185,24 +178,18 @@ def estrai_tariffe_pdf(cloud_event):
 
     blob = source_bucket.blob(file_name)
     pdf_bytes = blob.download_as_bytes()
-    
-    # Connessione a Google Sheets
+
     try:
         spreadsheet = gc.open_by_key(SPREADSHEET_ID)
     except Exception as e:
         print(f"Errore di accesso al Google Sheet (ID: {SPREADSHEET_ID}): {e}. Controlla i permessi del Service Account.")
         return
 
-    # --- LETTURA DINAMICA DELLE PAGINE DAL FOGLIO 'INDICE' ---
     try:
         worksheet_indice = spreadsheet.worksheet("INDICE")
-        # Scarichiamo la tabella eliminando eventuali righe e colonne totalmente vuote
         df_indice = get_as_dataframe(worksheet_indice).dropna(how='all', axis=0).dropna(how='all', axis=1)
-        
-        # Normalizza i nomi delle colonne (tutto minuscolo e senza spazi extra)
         df_indice.columns = df_indice.columns.astype(str).str.lower().str.strip()
-        
-        # Funzione di supporto per cercare la pagina corretta in base a Regione e Classe
+
         def ottieni_pagina(regione, classe):
             risultato = df_indice[
                 (df_indice['regione'].astype(str).str.upper() == regione.upper()) &
@@ -211,8 +198,7 @@ def estrai_tariffe_pdf(cloud_event):
             if not risultato.empty:
                 return int(risultato['pagina'].iloc[0])
             raise ValueError(f"Impossibile trovare la pagina per Regione: {regione}, Classe: {classe} nel foglio INDICE.")
-        
-        # Recupera le pagine in modo dinamico
+
         pagina_it_de_a = ottieni_pagina("IT_DE", "A")
         pagina_it_de_b = ottieni_pagina("IT_DE", "B")
         pagina_fr_sp_a = ottieni_pagina("FR_SP", "A")
@@ -224,7 +210,6 @@ def estrai_tariffe_pdf(cloud_event):
         print(f"❌ Errore durante la lettura del foglio 'INDICE': {e}")
         return
 
-    # Mappatura: (Pagina Dinamica, Schema, Nome Foglio Google Sheet)
     tasks = [
         (pagina_it_de_a, TabellaItDeA, "IT_DE_A"),
         (pagina_it_de_b, TabellaItDeB, "IT_DE_B"),
@@ -237,18 +222,14 @@ def estrai_tariffe_pdf(cloud_event):
             print(f"Estrazione pagina {pagina} per il tab {nome_tab_sheet}...")
             
             df = processa_pagina_pdf(pdf_bytes, pagina, schema)
-            
-            # --- SCRITTURA SU GOOGLE SHEETS ---
+
             try:
                 worksheet = spreadsheet.worksheet(nome_tab_sheet)
             except gspread.exceptions.WorksheetNotFound:
                 print(f"Il foglio '{nome_tab_sheet}' non esiste. Lo creo...")
                 worksheet = spreadsheet.add_worksheet(title=nome_tab_sheet, rows="100", cols="30")
             
-            # Svuota i vecchi dati presenti nel foglio
             worksheet.clear()
-            
-            # Inserisce la nuova tabella
             set_with_dataframe(worksheet, df, resize=True)
             print(f"✅ Dati salvati in Google Sheets (Foglio: {nome_tab_sheet})")
             

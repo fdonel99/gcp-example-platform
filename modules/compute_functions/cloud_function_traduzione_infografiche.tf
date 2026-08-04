@@ -16,6 +16,9 @@ resource "google_cloudfunctions2_function" "function_traduzione_infografiche" {
   project     = var.project_id
   name        = "traduzione-infografiche-fn-${var.environment}"
   location    = var.region
+    labels = {
+    scopo       = "fn-traduzione-infografiche"
+  }
   description = "Trigger file input per la pipeline delle infografiche (${var.environment})"
   
   build_config {
@@ -52,7 +55,6 @@ resource "google_cloudfunctions2_function" "function_traduzione_infografiche" {
     
     event_filters {
       attribute = "bucket"
-      # Sostituito con la variabile del bucket di input infografiche
       value     = var.bucket_infografica_input_name
     }
   }

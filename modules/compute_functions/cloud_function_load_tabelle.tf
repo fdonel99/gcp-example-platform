@@ -16,6 +16,9 @@ resource "google_cloudfunctions2_function" "function_tables_loading" {
   project     = var.project_id
   name        = "tables-loading-fn-${var.environment}"
   location    = var.region 
+    labels = {
+    scopo       = "fn-caricamento-tabelle-in-bq"
+  }
   description = "Carica i dati importati da Drive in tabelle Big Query (${var.environment})"
 
   build_config {

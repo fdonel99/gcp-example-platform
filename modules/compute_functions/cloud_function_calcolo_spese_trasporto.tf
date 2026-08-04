@@ -16,7 +16,9 @@ resource "google_cloudfunctions2_function" "function_calcolo_spese_trasporto" {
   project     = var.project_id
   name        = "calcolo-spese-trasporto-fn-${var.environment}"
   location    = var.region
-  
+  labels = {
+    scopo       = "fn-calcolo-spese-trasporto"
+  }
   build_config {
     runtime     = "python311"
     entry_point = "calcola_spese_trasporto"      
@@ -49,16 +51,12 @@ resource "google_cloudfunctions2_function" "function_calcolo_spese_trasporto" {
     
     event_filters {
       attribute = "bucket"
-      # Usiamo la variabile passata dal modulo storage
       value     = var.bucket_spese_trasporto_name
     }
   }
 }
 
-# --- PERMESSI IAM PER I TRIGGER EVENTARC ---
-
 data "google_project" "current" {
-  # AGGIUNTO: Assicuriamoci che prenda il numero del progetto giusto (Prod o Test)
   project_id = var.project_id
 }
 
@@ -69,7 +67,6 @@ resource "google_storage_bucket_iam_member" "eventarc_storage_permissions" {
 }
 
 resource "google_project_iam_member" "storage_pubsub_publisher" {
-  # CORRETTO: rimosso "cloud-platform-northstar" hardcodato
   project = var.project_id 
   role    = "roles/pubsub.publisher"
   member  = "serviceAccount:service-${data.google_project.current.number}@gs-project-accounts.iam.gserviceaccount.com"

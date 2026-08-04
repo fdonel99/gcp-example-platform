@@ -13,6 +13,10 @@ resource "google_storage_bucket" "anagrafica_prodotti" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = local.is_test
+
+  labels = {
+    scopo = "bkt-anagrafica-prodotti"
+  }
 }
 
 resource "google_storage_bucket" "export_ns_zip" {
@@ -23,6 +27,11 @@ resource "google_storage_bucket" "export_ns_zip" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = local.is_test
+
+  labels = {
+    scopo = "bkt-zip-tabelle"
+  }
+
   versioning {
     enabled = local.is_test
   }
@@ -48,6 +57,10 @@ resource "google_storage_bucket" "report_fornitori" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = local.is_test
+
+  labels = {
+    scopo = "bkt-report-fornitori"
+  }
 }
 
 resource "google_storage_bucket" "spese_trasporto" {
@@ -58,6 +71,11 @@ resource "google_storage_bucket" "spese_trasporto" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = local.is_test
+
+  labels = {
+    scopo = "bkt-calcolo-spese-trasporto"
+  }
+
   lifecycle_rule {
     action {
       type = "Delete"
@@ -77,6 +95,11 @@ resource "google_storage_bucket" "infografica_input" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = local.is_test
+
+  labels = {
+    scopo = "bkt-input-infografiche"
+  }
+
   lifecycle_rule {
     condition {
       age = 1
@@ -95,6 +118,11 @@ resource "google_storage_bucket" "infografica_output" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = local.is_test
+
+  labels = {
+    scopo = "bkt-output-infografiche"
+  }
+
   lifecycle_rule {
     condition {
       age = 1
@@ -113,6 +141,11 @@ resource "google_storage_bucket" "tf_state" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = local.is_test
+
+  labels = {
+    scopo ="bkt-tf-state"
+  }
+
   versioning {
     enabled = true
   }
@@ -135,6 +168,10 @@ resource "google_storage_bucket" "bucket_codice_funzioni" {
   public_access_prevention    = "enforced"
   force_destroy               = local.is_test
   
+  labels = {
+    scopo = "bkt-codice-funzioni"
+  }
+
   dynamic "lifecycle_rule" {
     for_each = local.is_test ? [1] : []
     
@@ -158,4 +195,8 @@ resource "google_storage_bucket" "bucket_listino_costi_trasporto" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = local.is_test
+
+  labels = {
+    scopo = "bkt-listino-costi-trasporto"
+  }
 }

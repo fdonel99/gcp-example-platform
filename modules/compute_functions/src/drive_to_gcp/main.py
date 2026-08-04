@@ -140,6 +140,8 @@ def drive_to_gcp(request):
         print("Download completato.")
         
         # 7. Upload su Cloud Storage
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(destination_blob_name)
         print(f"Caricamento su GCS in '{bucket_name}' come '{destination_blob_name}'...")
         blob.upload_from_file(file_buffer, content_type=mime_type)
         

@@ -1,30 +1,37 @@
 # --- GESTIONE PERMESSI IAM ---
 
-# 1. Accesso Editor per Komm Srls
+# 1. Accesso Editor per Komm Srls (SOLO IN PROD)
 resource "google_project_iam_member" "kommsrls_admin" {
+  count   = var.environment == "prod" ? 1 : 0
+  
   project = var.project_id
   role    = "roles/editor"
   member  = "user:kommsrls@gmail.com"
 }
-
-# 2. Permessi Storage per Jacopo
-resource "google_project_iam_member" "jacopo_storage_admin" {
+resource "google_project_iam_member" "kommsrls_billing_test" {
+  count   = var.environment == "test" ? 1 : 0
+  
   project = var.project_id
-  for_each = toset([
+  role    = "roles/billing.projectManager"
+  member  = "user:kommsrls@gmail.com"
+}
+resource "google_project_iam_member" "jacopo_storage_admin" {
+  for_each = var.environment == "prod" ? toset([
     "roles/storage.objectAdmin",          
     "roles/storage.bucketViewer"        
-  ])
+  ]) : toset([])
+  
+  project = var.project_id
   role    = each.value
   member  = "user:jacopo.donelli@northstaritaly.com"
 }
-
-# 3. Permessi Storage per Alberto
 resource "google_project_iam_member" "alberto_storage_admin" {
-  project = var.project_id
-  for_each = toset([
+  for_each = var.environment == "prod" ? toset([
     "roles/storage.objectAdmin",          
     "roles/storage.bucketViewer"        
-  ])
+  ]) : toset([])
+  
+  project = var.project_id
   role    = each.value
   member  = "user:alberto.donelli@northstaritaly.com"
 }

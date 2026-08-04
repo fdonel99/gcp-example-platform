@@ -20,7 +20,7 @@ resource "google_cloud_scheduler_job" "schedulazione_drive_to_gcp" {
       bucket_name = var.bucket_export_ns_zip_name
     }))
     oidc_token {
-      service_account_email = var.cloud_worker_sa_email
+      service_account_email = var.cf_scheduler_sa_email
       audience              = var.function_drive_to_gcp_uri
     }
   }
@@ -39,7 +39,7 @@ resource "google_cloud_scheduler_job" "schedulazione_tables_loading" {
     http_method = "POST"
     uri         = var.function_tables_loading_uri
     oidc_token {
-      service_account_email = var.cloud_worker_sa_email
+      service_account_email = var.cf_scheduler_sa_email
       audience              = var.function_tables_loading_uri
     }
   }
