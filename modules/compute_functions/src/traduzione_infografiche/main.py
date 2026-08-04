@@ -492,7 +492,7 @@ def process_infographic_trigger(cloud_event):
         logger.log("\n=== ELABORAZIONE COMPLETATA CON SUCCESSO ===")
 
     except Exception as e:
-        logger.log(f"\nERRORE CRITICO: {e}")
+        logger.log(f"\nERRORE CRITICO:  {e}")
         raise e
     finally:
         try:
