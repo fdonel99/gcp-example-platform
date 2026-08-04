@@ -481,7 +481,7 @@ def process_infographic_trigger(cloud_event):
         
         for lang in ["en", "fr", "de", "es", "nl"]:
             if mappatura_testi:
-                final_image_bytes = sovrascrivi_testo(original_image_bytes, mappatura_testi, lang, logger, formato_img)
+                final_image_bytes = sovrascrivi_testo( original_image_bytes, mappatura_testi, lang, logger, formato_img)
             else:
                 final_image_bytes = original_image_bytes
                 
