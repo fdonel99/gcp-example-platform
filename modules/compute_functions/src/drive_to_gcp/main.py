@@ -9,6 +9,7 @@ from googleapiclient.http import MediaIoBaseDownload
 from google.cloud import storage
 import google.auth
 
+# Forza aggiornamento zip
 # --- CONFIGURAZIONE TELEGRAM E AMBIENTE ---
 # I segreti ora vengono letti ESCLUSIVAMENTE dalle variabili d'ambiente (Secret Manager)
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
