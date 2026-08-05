@@ -112,7 +112,7 @@ def run_sqlite_to_bigquery(request):
         invia_notifica_telegram(msg_blocco)
         return msg_blocco, 200
 
-    extract_to = os.path.join(MOUNT_PATH, 'extracted/')
+    extract_to = '/tmp/extracted/'
     print(f"Cron avviato. Inizio elaborazione del file recente: '{file_name}'")
 
     try:
