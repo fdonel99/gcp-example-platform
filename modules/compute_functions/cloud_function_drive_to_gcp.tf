@@ -46,6 +46,7 @@ resource "google_cloudfunctions2_function" "function_drive_to_gcp" {
     max_instance_request_concurrency = 80
     
     service_account_email            = var.cloud_worker_sa_email
+    environment_variables = {}
 
     secret_environment_variables {
       key        = "TELEGRAM_TOKEN"
