@@ -3,7 +3,7 @@ DECLARE dest_uri STRING;
 SET dest_uri = CONCAT('gs://${bucket_name}/report_fornitori_', FORMAT_DATE('%Y%m%d', CURRENT_DATE('Europe/Rome')), '_*.csv');
 
 -- 1. Creazione della tabella su BigQuery (i dati originali mantengono i formati numerici)
-CREATE OR REPLACE TABLE `${project_id}.DB_NORTHSTAR.REPORT_FORNITORI` AS 
+CREATE OR REPLACE TABLE `${project_id}.NORTHSTAR.REPORT_FORNITORI` AS 
 
 ( 
   SELECT 
@@ -31,9 +31,9 @@ CREATE OR REPLACE TABLE `${project_id}.DB_NORTHSTAR.REPORT_FORNITORI` AS
       o.PREZZO_UNITARIO, 
       p.iva AS iva,
       t.NAZIONE_DES
-    FROM `${project_id}.DB_NORTHSTAR.dbo_ordini_righe` o 
-    LEFT JOIN `${project_id}.DB_NORTHSTAR.ANAGRAFICA_PRODOTTO` p USING(sku)
-    LEFT JOIN `${project_id}.DB_NORTHSTAR.dbo_ordini_testate_pag` t USING(ORDINE)
+    FROM `${project_id}.NORTHSTAR.dbo_ordini_righe` o 
+    LEFT JOIN `${project_id}.NORTHSTAR.ANAGRAFICA_PRODOTTO` p USING(sku)
+    LEFT JOIN `${project_id}.NORTHSTAR.dbo_ordini_testate_pag` t USING(ORDINE)
     WHERE o.DATA_SPEDIZIONE != "000000"
   )
   GROUP BY ALL
@@ -53,5 +53,5 @@ EXECUTE IMMEDIATE FORMAT("""
     REPLACE(CAST(prezzo_totale AS STRING), '.', ',') AS prezzo_totale,
     REPLACE(CAST(tot_qta_spedita AS STRING), '.', ',') AS tot_qta_spedita,
     REPLACE(CAST(prezzo_unitario AS STRING), '.', ',') AS prezzo_unitario
-  FROM `${project_id}.DB_NORTHSTAR.REPORT_FORNITORI`
+  FROM `${project_id}.NORTHSTAR.REPORT_FORNITORI`
 """, dest_uri);
