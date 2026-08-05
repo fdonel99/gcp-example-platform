@@ -48,6 +48,7 @@ resource "google_cloudfunctions2_function" "function_tables_loading" {
       DATASET_ID  = "NORTHSTAR"
       BUCKET_NAME = var.bucket_export_ns_zip_name
       SHEET_ID    = "1ptH6m4mS6UozgrtRUfoP_wMMwbx7wTiIn1T6eJ0Vy1c" 
+      GOOGLE_CLOUD_PROJECT = var.project_id
     }
 
     # Variabili d'ambiente SEGRETE (collegate a Secret Manager)
