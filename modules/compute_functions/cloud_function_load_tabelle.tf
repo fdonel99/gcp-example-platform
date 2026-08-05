@@ -37,7 +37,7 @@ resource "google_cloudfunctions2_function" "function_tables_loading" {
   service_config {
     min_instance_count               = 0
     max_instance_count               = 3
-    available_memory                 = "1Gi"
+    available_memory                 = "2Gi"
     available_cpu                    = "1"
     timeout_seconds                  = 3600
     max_instance_request_concurrency = 80
