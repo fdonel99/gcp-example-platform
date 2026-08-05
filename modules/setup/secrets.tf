@@ -1,6 +1,10 @@
 resource "google_secret_manager_secret" "telegram_token" {
   secret_id = "telegram-token-${var.environment}" 
   project   = var.project_id
+
+  labels = {
+    scopo = "secret-telegram-token"
+  }
   
   replication {
     auto {}
@@ -21,6 +25,10 @@ resource "google_secret_manager_secret_iam_member" "worker_telegram_secret_acces
 resource "google_secret_manager_secret" "telegram_chat_id" {
   secret_id = "telegram-chat-id-${var.environment}" 
   project   = var.project_id
+
+  labels = {
+    scopo = "secret-telegram-chat-id"
+  }
   
   replication {
     auto {}

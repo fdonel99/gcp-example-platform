@@ -46,10 +46,12 @@ locals {
     "pubsub.googleapis.com",
     "run.googleapis.com",
     "saasservicemgmt.googleapis.com",
+    "secretmanager.googleapis.com",
     "securitycenter.googleapis.com",
     "securitycentermanagement.googleapis.com",
     "servicemanagement.googleapis.com",
     "serviceusage.googleapis.com",
+    "sheets.googleapis.com",
     "sql-component.googleapis.com",
     "storage-api.googleapis.com",
     "storage-component.googleapis.com",
@@ -58,7 +60,6 @@ locals {
     "texttospeech.googleapis.com",
     "translate.googleapis.com",
     "vision.googleapis.com",
-    "sheets.googleapis.com" 
   ]
 }
 

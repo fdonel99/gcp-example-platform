@@ -174,3 +174,39 @@ resource "google_storage_bucket" "bucket_listino_costi_trasporto" {
     scopo = "bkt-listino-costi-trasporto"
   }
 }
+
+/*
+# =======================================================
+# BUCKET DI STATO (GESTITO MANUALMENTE DA CONSOLE)
+# =======================================================
+# Questo blocco è lasciato qui solo a scopo documentale.
+# Il bucket reale è configurato direttamente su Google Cloud 
+# per evitare conflitti con l'inizializzazione del backend.
+
+resource "google_storage_bucket" "tf_state" {
+  project                     = var.project_id
+  name                        = "bkt-tf-state-for-transition-${var.environment}"
+  location                    = "EU"
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  force_destroy               = local.is_test
+
+  labels = {
+    scopo = "bkt-tf-state"
+  }
+
+  versioning {
+    enabled = true
+  }
+  
+  lifecycle_rule {
+    action {
+      type = "Delete"
+    }
+    condition {
+      days_since_noncurrent_time = local.is_test ? 7 : 90
+    }
+  }
+}
+*/
