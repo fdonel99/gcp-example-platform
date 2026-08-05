@@ -8,12 +8,16 @@ on:
 jobs:
   terraform:
     name: "Terraform Deploy Test"
-    runs-on: ubuntu-latest
-    
-    # Lavoriamo nella cartella di test
+    runs-on:  ubuntu-latest
+  
     defaults:
       run:
         working-directory: environments/test
+
+    env:
+      TF_VAR_telegram_token_value: ${{ secrets.TELEGRAM_TOKEN }}
+      TF_VAR_telegram_chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
+      TF_VAR_drive_folder_id: ${{ secrets.DRIVE_FOLDER_ID }}
 
     steps:
       - name: Checkout del codice
