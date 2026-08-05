@@ -29,6 +29,7 @@ CREATE OR REPLACE TABLE `${project_id}.NORTHSTAR.REPORT_FORNITORI` AS
       o.DATAISO, 
       t.newnew as pagamento_def, 
       o.PREZZO_UNITARIO, 
+      o.PREZZO_TOTALE,
       p.iva AS iva,
       t.NAZIONE_DES
     FROM `${project_id}.NORTHSTAR.dbo_ordini_righe` o 
