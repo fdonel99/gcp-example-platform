@@ -20,33 +20,48 @@ import polars as pl
 import google.auth
 import gspread
 
-# --- CONFIGURAZIONE TELEGRAM ---
-TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN', '8906093462:AAFi_3hQum83NXR7dMYLu0RZXKDLvJwdGro')
-TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '5122727806')
+# --- CONFIGURAZIONE TELEGRAM E AMBIENTE ---
+# I segreti ora vengono letti ESCLUSIVAMENTE dalle variabili d'ambiente (Secret Manager)
+TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
-# --- CONFIGURAZIONE CLOUD (Dinamica tramite Variabili d'Ambiente) ---
-PROJECT_ID = os.environ.get('PROJECT_ID', 'cloud-platform-northstar')
-DATASET_ID = os.environ.get('DATASET_ID', 'NORTHSTAR')
-BUCKET_NAME = os.environ.get('BUCKET_NAME', 'bkt-export-ns-zip')
+# GOOGLE_CLOUD_PROJECT è iniettato in automatico da Cloud Functions
+PROJECT_ID = os.environ.get('GOOGLE_CLOUD_PROJECT', '')
+
+# Anche queste configurazioni ora dipendono dalle variabili passate da Terraform
+DATASET_ID = os.environ.get('DATASET_ID')
+BUCKET_NAME = os.environ.get('BUCKET_NAME')
+SHEET_ID = os.environ.get('SHEET_ID', '1ptH6m4mS6UozgrtRUfoP_wMMwbx7wTiIn1T6eJ0Vy1c') # Consigliato passare anche questo via TF
+
 MOUNT_PATH = '/mnt/bucket'    # Percorso GCS Fuse fisso
 
 def invia_notifica_telegram(messaggio):
-    """Invia un messaggio di testo tramite il bot Telegram."""
-    if not TELEGRAM_TOKEN or TELEGRAM_TOKEN == 'INSERISCI_QUI_IL_TUO_TOKEN':
-        print("Telegram non configurato. Salto invio notifica.")
+    """Invia un messaggio di testo tramite il bot Telegram con prefisso ambiente."""
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram non configurato (Token o Chat ID mancanti). Salto invio notifica.")
         return
+
+    # Determina il prefisso dinamico leggendo il nome del progetto
+    if 'prod' in PROJECT_ID.lower():
+        prefisso = "🔴 *[PROD]* - "
+    elif 'test' in PROJECT_ID.lower():
+        prefisso = "🧪 *[TEST]* - "
+    else:
+        prefisso = "⚙️ *[INFO]* - "
+
+    messaggio_formattato = f"{prefisso}{messaggio}"
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = urllib.parse.urlencode({
         'chat_id': TELEGRAM_CHAT_ID, 
-        'text': messaggio,
+        'text': messaggio_formattato,
         'parse_mode': 'Markdown'
     }).encode('utf-8')
     
     try:
         req = urllib.request.Request(url, data=data)
         urllib.request.urlopen(req)
-        print("✅ Notifica Telegram inviata con successo!")
+        print(f"✅ Notifica Telegram inviata con successo per l'ambiente {prefisso.strip(' *[-]')}")
     except Exception as e:
         print(f"⚠️ Errore durante l'invio della notifica Telegram: {e}")
 
@@ -58,6 +73,11 @@ def run_sqlite_to_bigquery(request):
     Cerca l'ultimo ZIP (se inserito negli ultimi 7 giorni), estrae e seleziona 
     SOLO il file SQLite corrispondente, lo elabora in parallelo su BigQuery e pulisce la RAM.
     """
+    if not DATASET_ID or not BUCKET_NAME:
+        errore_msg = "Parametri DATASET_ID o BUCKET_NAME mancanti nelle variabili d'ambiente."
+        invia_notifica_telegram(f"🚨 *Errore Cloud Function!*\n{errore_msg}")
+        return f"Errore: {errore_msg}", 400
+
     # 1. CERCA IL FILE DA ELABORARE (Nome fisso per rispettare il versioning Terraform)
     zip_path = os.path.join(MOUNT_PATH, 'export_latest.zip')
     file_name = 'export_latest.zip'
@@ -161,8 +181,7 @@ def run_sqlite_to_bigquery(request):
                     ])
                     gc_sheets = gspread.authorize(credentials)
                     
-                    # Apri il file tramite ID
-                    SHEET_ID = '1ptH6m4mS6UozgrtRUfoP_wMMwbx7wTiIn1T6eJ0Vy1c'
+                    # Apri il file tramite ID (ora letto dalle variabili)
                     sh = gc_sheets.open_by_key(SHEET_ID)
                     
                     # 1. Estrai e prepara il foglio MOVIMENTO

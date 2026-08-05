@@ -1,23 +1,9 @@
-# TABLES LOADING
-
-data "archive_file" "zip_tables_loading" {
-  type        = "zip"
-  source_dir  = "${path.module}/src/tables_loading" 
-  output_path = "${path.module}/src/tables_loading.zip"
-}
-
-resource "google_storage_bucket_object" "upload_zip_tables_loading" {
-  name   = "tables_loading_${data.archive_file.zip_tables_loading.output_md5}.zip"
-  bucket = var.bucket_codice_funzioni_name
-  source = data.archive_file.zip_tables_loading.output_path
-}
-
 resource "google_cloudfunctions2_function" "function_tables_loading" {
   project     = var.project_id
   name        = "tables-loading-fn-${var.environment}"
   location    = var.region 
-    labels = {
-    scopo       = "fn-caricamento-tabelle-in-bq"
+  labels = {
+    scopo = "fn-caricamento-tabelle-in-bq"
   }
   description = "Carica i dati importati da Drive in tabelle Big Query (${var.environment})"
 
@@ -41,29 +27,27 @@ resource "google_cloudfunctions2_function" "function_tables_loading" {
     timeout_seconds                  = 3600
     max_instance_request_concurrency = 80
     service_account_email            = var.cloud_worker_sa_email
+    
+    # Variabili d'ambiente in chiaro
     environment_variables = {
-      PROJECT_ID  = var.project_id
       DATASET_ID  = "NORTHSTAR"
       BUCKET_NAME = var.bucket_export_ns_zip_name
+      SHEET_ID    = "1ptH6m4mS6UozgrtRUfoP_wMMwbx7wTiIn1T6eJ0Vy1c" # Aggiunto!
     }
-  }
-}
 
-resource "null_resource" "mount_gcs_fuse_volume" {
-  triggers = {
-    function_id = google_cloudfunctions2_function.function_tables_loading.id
-  }
+    # Variabili d'ambiente SEGRETE (collegate a Secret Manager)
+    secret_environment_variables {
+      key        = "TELEGRAM_TOKEN"
+      project_id = var.project_id
+      secret     = google_secret_manager_secret.telegram_token.secret_id # Assicurati che il nome della risorsa coincida con il tuo file main/secret
+      version    = "latest"
+    }
 
-  provisioner "local-exec" {
-    # NOTA: Ho aggiunto il parametro --project e reso dinamico il nome del bucket
-    command = <<EOT
-      gcloud run services update ${google_cloudfunctions2_function.function_tables_loading.name} \
-        --project=${var.project_id} \
-        --region=${google_cloudfunctions2_function.function_tables_loading.location} \
-        --add-volume=name=bucket-zip,type=cloud-storage,bucket=${var.bucket_export_ns_zip_name} \
-        --add-volume-mount=volume=bucket-zip,mount-path=/mnt/bucket \
-        --execution-environment=gen2 \
-        --quiet
-    EOT
+    secret_environment_variables {
+      key        = "TELEGRAM_CHAT_ID"
+      project_id = var.project_id
+      secret     = google_secret_manager_secret.telegram_chat_id.secret_id # Assicurati che il nome della risorsa coincida con il tuo file main/secret
+      version    = "latest"
+    }
   }
 }

@@ -9,29 +9,41 @@ from googleapiclient.http import MediaIoBaseDownload
 from google.cloud import storage
 import google.auth
 
-# --- CONFIGURAZIONE TELEGRAM ---
-# Best practice: leggere i segreti dalle variabili di ambiente. 
-# Mantengo i tuoi token hardcodati come fallback per retrocompatibilità temporanea.
-TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN', '8906093462:AAFi_3hQum83NXR7dMYLu0RZXKDLvJwdGro')
-TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '5122727806')
+# --- CONFIGURAZIONE TELEGRAM E AMBIENTE ---
+# I segreti ora vengono letti ESCLUSIVAMENTE dalle variabili d'ambiente (Secret Manager)
+TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
+
+# Recupera in automatico l'ID del progetto in cui sta girando la Cloud Function
+PROJECT_ID = os.environ.get('GOOGLE_CLOUD_PROJECT', '')
 
 def invia_notifica_telegram(messaggio):
-    """Invia un messaggio di testo tramite il bot Telegram."""
-    if not TELEGRAM_TOKEN or TELEGRAM_TOKEN == 'INSERISCI_QUI_IL_TUO_TOKEN':
-        print("Telegram non configurato. Salto invio notifica.")
+    """Invia un messaggio di testo tramite il bot Telegram con prefisso ambiente."""
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram non configurato (Token o Chat ID mancanti). Salto invio notifica.")
         return
+
+    # Determina il prefisso dinamico leggendo il nome del progetto
+    if 'prod' in PROJECT_ID.lower():
+        prefisso = "🔴 *[PROD]* - "
+    elif 'test' in PROJECT_ID.lower():
+        prefisso = "🧪 *[TEST]* - "
+    else:
+        prefisso = "⚙️ *[INFO]* - "
+
+    messaggio_formattato = f"{prefisso}{messaggio}"
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = urllib.parse.urlencode({
         'chat_id': TELEGRAM_CHAT_ID, 
-        'text': messaggio,
+        'text': messaggio_formattato,
         'parse_mode': 'Markdown'
     }).encode('utf-8')
     
     try:
         req = urllib.request.Request(url, data=data)
         urllib.request.urlopen(req)
-        print("✅ Notifica Telegram inviata con successo!")
+        print(f"✅ Notifica Telegram inviata con successo per l'ambiente {prefisso.strip(' *[-]')}")
     except Exception as e:
         print(f"⚠️ Errore durante l'invio della notifica Telegram: {e}")
 
@@ -54,7 +66,6 @@ def drive_to_gcp(request):
         invia_notifica_telegram(f"🚨 *Errore Cloud Function!*\n{errore_msg}")
         return f"Errore: {errore_msg}", 400
 
-    # MODIFICA: Rimosso il fallback hardcodato. Il bucket DEVE arrivare dallo Scheduler.
     if 'bucket_name' not in request_json:
         errore_msg = "Parametro 'bucket_name' mancante nel body JSON. Aggiornare Cloud Scheduler."
         invia_notifica_telegram(f"🚨 *Errore Cloud Function!*\n{errore_msg}")
