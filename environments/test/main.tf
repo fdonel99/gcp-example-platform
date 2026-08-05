@@ -18,6 +18,8 @@ module "setup" {
   source     = "../../modules/setup"
   project_id = var.project_id
   environment = var.environment
+  telegram_chat_id_value = var.telegram_chat_id
+  telegram_token_value = var.telegram_token_value
 }
 
 # =======================================================
@@ -46,6 +48,8 @@ module "compute_functions" {
   bucket_infografica_input_name  = module.data_storage.bucket_infografica_input_name
   bucket_infografica_output_name = module.data_storage.bucket_infografica_output_name
   bucket_listino_costi_trasporto_name = module.data_storage.bucket_listino_costi_trasporto_name
+  telegram_secret_name           = module.setup.telegram_secret_name
+  telegram_chat_id_secret_name   = module.setup.telegram_chat_id_secret_name
 }
 
 # =======================================================
@@ -62,6 +66,7 @@ module "orchestration" {
   bucket_anagrafica_prodotti_name = module.data_storage.bucket_anagrafica_prodotti_name
   bucket_report_fornitori_name    = module.data_storage.bucket_report_fornitori_name
   bucket_export_ns_zip_name       = module.data_storage.bucket_export_ns_zip_name
+  drive_folder_id                 = var.drive_folder_id
   
   # URI generati dal modulo Compute Functions
   function_drive_to_gcp_uri       = module.compute_functions.function_drive_to_gcp_uri

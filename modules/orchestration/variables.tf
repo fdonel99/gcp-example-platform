@@ -59,3 +59,8 @@ variable "region" {
   description = "La region in cui fare il deploy"
   default     = "europe-west1"
 }
+
+variable "drive_folder_id" {
+  description = "L'ID della cartella Google Drive da cui estrarre i file"
+  type        = string
+}

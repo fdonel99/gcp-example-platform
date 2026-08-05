@@ -1,5 +1,4 @@
 # --- BACKEND ---
-
 terraform {
   backend "gcs" {
     bucket  = "bkt-tf-state-for-transition" 

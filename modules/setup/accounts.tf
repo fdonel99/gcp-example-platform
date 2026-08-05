@@ -1,6 +1,5 @@
 # --- GESTIONE PERMESSI IAM ---
 
-# 1. Accesso Editor per Komm Srls (SOLO IN PROD)
 resource "google_project_iam_member" "kommsrls_admin" {
   count   = var.environment == "prod" ? 1 : 0
   

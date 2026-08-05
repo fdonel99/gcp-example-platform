@@ -18,9 +18,11 @@ resource "google_cloudfunctions2_function" "function_drive_to_gcp" {
   project     = var.project_id
   name        = "drive-to-gcp-fn-${var.environment}"
   location    = var.region 
-    labels = {
-    scopo       = "fn-drive-to-gcp"
+  
+  labels = {
+    scopo = "fn-drive-to-gcp"
   }
+  
   description = "Importa dati da Google Drive a GCP (${var.environment})"
 
   build_config {
@@ -33,7 +35,7 @@ resource "google_cloudfunctions2_function" "function_drive_to_gcp" {
         object = google_storage_bucket_object.upload_zip_drive_to_gcp.name
       }
     }
-  }
+  } 
 
   service_config {
     min_instance_count               = 0
@@ -44,5 +46,10 @@ resource "google_cloudfunctions2_function" "function_drive_to_gcp" {
     max_instance_request_concurrency = 80
     
     service_account_email            = var.cloud_worker_sa_email
-  }
-}
+
+    environment_variables = {
+      TELEGRAM_TOKEN_SECRET_NAME = var.telegram_secret_name
+      TELEGRAM_CHAT_ID           = var.telegram_chat_id_secret_name
+    } 
+  } 
+} 

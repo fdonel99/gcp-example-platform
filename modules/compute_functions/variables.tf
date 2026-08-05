@@ -48,3 +48,11 @@ variable "bucket_listino_costi_trasporto_name" {
   type        = string
   description = "Il nome del bucket di input per i listini PDF (usato per il trigger Eventarc)"
 }
+
+variable "telegram_secret_name" { 
+  type = string 
+}
+
+variable "telegram_chat_id_secret_name" { 
+  type = string 
+}
