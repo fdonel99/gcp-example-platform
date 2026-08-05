@@ -39,14 +39,14 @@ resource "google_cloudfunctions2_function" "function_tables_loading" {
     secret_environment_variables {
       key        = "TELEGRAM_TOKEN"
       project_id = var.project_id
-      secret     = google_secret_manager_secret.telegram_token.secret_id # Assicurati che il nome della risorsa coincida con il tuo file main/secret
+      secret     = var.telegram_secret_name # <-- Richiama la variabile passata dal main
       version    = "latest"
     }
 
     secret_environment_variables {
       key        = "TELEGRAM_CHAT_ID"
       project_id = var.project_id
-      secret     = google_secret_manager_secret.telegram_chat_id.secret_id # Assicurati che il nome della risorsa coincida con il tuo file main/secret
+      secret     = var.telegram_chat_id_secret_name # <-- Richiama la variabile passata dal main
       version    = "latest"
     }
   }

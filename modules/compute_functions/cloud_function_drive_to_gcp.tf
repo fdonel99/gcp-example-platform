@@ -47,9 +47,18 @@ resource "google_cloudfunctions2_function" "function_drive_to_gcp" {
     
     service_account_email            = var.cloud_worker_sa_email
 
-    environment_variables = {
-      TELEGRAM_TOKEN_SECRET_NAME = var.telegram_secret_name
-      TELEGRAM_CHAT_ID           = var.telegram_chat_id_secret_name
-    } 
-  } 
+    secret_environment_variables {
+      key        = "TELEGRAM_TOKEN"
+      project_id = var.project_id
+      secret     = var.telegram_secret_name
+      version    = "latest"
+    }
+
+    secret_environment_variables {
+      key        = "TELEGRAM_CHAT_ID"
+      project_id = var.project_id
+      secret     = var.telegram_chat_id_secret_name
+      version    = "latest"
+    }
+  }
 } 
