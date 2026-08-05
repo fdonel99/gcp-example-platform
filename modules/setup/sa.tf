@@ -40,7 +40,8 @@ resource "google_project_iam_member" "github_cloud_deployer_editor" {
   for_each = toset([
     "roles/editor",          
     "roles/resourcemanager.projectIamAdmin" ,
-    "roles/resourcemanager.lienModifier"       
+    "roles/resourcemanager.lienModifier",
+    "roles/secretmanager.admin"
   ])
   role    = each.value
   member  = "serviceAccount:${google_service_account.cloud_deployer.email}"

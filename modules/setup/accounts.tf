@@ -26,7 +26,7 @@ resource "google_project_iam_member" "jacopo_storage_admin" {
 }
 resource "google_project_iam_member" "alberto_storage_admin" {
   for_each = var.environment == "prod" ? toset([
-    "roles/storage.objectAdmin",          
+    "roles/storage.objectAdmin" ,          
     "roles/storage.bucketViewer"        
   ]) : toset([])
   
