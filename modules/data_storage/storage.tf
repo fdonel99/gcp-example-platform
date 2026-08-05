@@ -133,32 +133,6 @@ resource "google_storage_bucket" "infografica_output" {
   }
 }
 
-resource "google_storage_bucket" "tf_state" {
-  project                     = var.project_id
-  name                        = var.environment == "prod" ? "bkt-tf-state-for-transition" : "bkt-tf-state-for-transition-${var.project_id}"
-  location                    = "EU"
-  storage_class               = "STANDARD"
-  uniform_bucket_level_access = true
-  public_access_prevention    = "enforced"
-  force_destroy               = local.is_test
-
-  labels = {
-    scopo ="bkt-tf-state"
-  }
-
-  versioning {
-    enabled = true
-  }
-  lifecycle_rule {
-    action {
-      type = "Delete"
-    }
-    condition {
-      days_since_noncurrent_time = local.is_test ? 7 : 90
-    }
-  }
-}
-
 resource "google_storage_bucket" "bucket_codice_funzioni" {
   project                     = var.project_id
   name                        = var.environment == "prod" ? "bkt-functions-code" : "bkt-functions-code-${var.project_id}"
