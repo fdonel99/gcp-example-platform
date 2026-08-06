@@ -20,6 +20,7 @@ resource "google_secret_manager_secret_iam_member" "worker_telegram_secret_acces
   secret_id = google_secret_manager_secret.telegram_token.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloud_worker.email}"
+  project   = google_secret_manager_secret.telegram_chat_id.project
 }
 
 resource "google_secret_manager_secret" "telegram_chat_id" {
@@ -44,4 +45,5 @@ resource "google_secret_manager_secret_iam_member" "worker_telegram_chat_id_acce
   secret_id = google_secret_manager_secret.telegram_chat_id.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloud_worker.email}"
+  project   = google_secret_manager_secret.telegram_chat_id.project
 }
