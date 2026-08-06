@@ -1,0 +1,6 @@
+google-cloud-bigquery>=3.11.0
+pandas>=2.1.0
+db-dtypes>=1.1.0
+openpyxl>=3.1.0
+google-api-python-client>=2.97.0
+google-auth>=2.22.0

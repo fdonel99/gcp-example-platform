@@ -3,11 +3,6 @@ output "dataset_principale_id" {
   value       = google_bigquery_dataset.dataset_principale.dataset_id
 }
 
-output "bucket_anagrafica_prodotti_name" {
-  description = "Nome del bucket per l'anagrafica prodotti"
-  value       = google_storage_bucket.anagrafica_prodotti.name
-}
-
 output "bucket_report_fornitori_name" {
   description = "Nome del bucket per il report fornitori"
   value       = google_storage_bucket.report_fornitori.name

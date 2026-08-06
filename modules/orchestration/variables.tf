@@ -64,3 +64,8 @@ variable "drive_folder_id" {
   description = "L'ID della cartella Google Drive da cui estrarre i file"
   type        = string
 }
+
+variable "function_anagrafica_prodotto_uri" {
+  type        = string
+  description = "L'URI della Cloud Function che esporta l'anagrafica prodotto su Drive"
+}

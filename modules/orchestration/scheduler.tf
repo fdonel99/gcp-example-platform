@@ -44,3 +44,22 @@ resource "google_cloud_scheduler_job" "schedulazione_tables_loading" {
     }
   }
 }
+
+resource "google_cloud_scheduler_job" "schedulazione_bq_to_drive" {
+  project          = var.project_id
+  name             = "bq-to-drive-scheduler-${var.environment}"
+  description      = "Schedulazione per esportare l'anagrafica prodotto in Excel su Drive ogni domenica (${var.environment})"
+  schedule         = "15 17 * * 0"
+  time_zone        = "Europe/Rome"
+  region           = var.region
+
+  http_target {
+    http_method = "POST"
+    uri         = var.function_anagrafica_prodotto_uri
+    
+    oidc_token {
+      service_account_email = var.cf_scheduler_sa_email
+      audience              = var.function_anagrafica_prodotto_uri
+    }
+  }
+}
