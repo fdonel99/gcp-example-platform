@@ -1,4 +1,4 @@
-# --- MAIN ---
+# --- BACKEND ---
 
 terraform {
   backend "gcs" {

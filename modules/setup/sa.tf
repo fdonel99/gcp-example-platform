@@ -41,7 +41,8 @@ resource "google_project_iam_member" "github_cloud_deployer_editor" {
     "roles/editor",          
     "roles/resourcemanager.projectIamAdmin" ,
     "roles/resourcemanager.lienModifier",
-    "roles/secretmanager.admin"
+    "roles/secretmanager.admin",
+    "roles/bigquery.admin"
   ])
   role    = each.value
   member  = "serviceAccount:${google_service_account.cloud_deployer.email}"
