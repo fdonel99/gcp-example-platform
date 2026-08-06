@@ -68,17 +68,19 @@ module "orchestration" {
   
   # Variabili passate dagli ALTRI moduli:
   cloud_worker_sa_email           = module.setup.cloud_worker_sa_email
-  bucket_anagrafica_prodotti_name = module.data_storage.bucket_anagrafica_prodotti_name
-  bucket_report_fornitori_name    = module.data_storage.bucket_report_fornitori_name
-  bucket_export_ns_zip_name       = module.data_storage.bucket_export_ns_zip_name
+
+  # --- RIGHE CHE MANCAVANO DA REINSERIRE ---
+  bucket_report_fornitori_name     = module.data_storage.bucket_report_fornitori_name
+  bucket_export_ns_zip_name        = module.data_storage.bucket_export_ns_zip_name
+  drive_folder_id                  = var.drive_folder_id 
   
-  drive_folder_id                 = var.drive_folder_id 
-  
-  # URI generati dal modulo Compute Functions
-  function_drive_to_gcp_uri       = module.compute_functions.function_drive_to_gcp_uri
-  function_tables_loading_uri     = module.compute_functions.function_tables_loading_uri
+  # --- URI DELLE CLOUD FUNCTIONS ---
+  function_drive_to_gcp_uri        = module.compute_functions.function_drive_to_gcp_uri
+  function_tables_loading_uri      = module.compute_functions.function_tables_loading_uri
   function_anagrafica_prodotto_uri = module.compute_functions.function_anagrafica_prodotto_uri
-  cf_scheduler_sa_email           = module.setup.cf_scheduler_sa_email
-  bq_scheduler_sa_email           = module.setup.bq_scheduler_sa_email
+  
+  # --- SERVICE ACCOUNTS ---
+  cf_scheduler_sa_email            = module.setup.cf_scheduler_sa_email
+  bq_scheduler_sa_email            = module.setup.bq_scheduler_sa_email
   
 }

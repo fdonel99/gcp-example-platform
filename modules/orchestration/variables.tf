@@ -26,11 +26,6 @@ variable "cf_scheduler_sa_email" {
   description = "email del Service Account dedicato allo scheduler di BigQuery"
 }
 
-#BUCKET
-variable "bucket_anagrafica_prodotti_name" {
-  type        = string
-  description = "Nome del bucket dove salvare le anagrafiche (generato nel modulo storage)"
-}
 
 variable "bucket_report_fornitori_name" {
   type        = string
