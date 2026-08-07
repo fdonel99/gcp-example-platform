@@ -26,7 +26,7 @@ def invia_notifica_telegram(messaggio):
 
     # Determina il prefisso dinamico leggendo il nome del progetto
     if 'prod' in PROJECT_ID.lower() or PROJECT_ID == 'cloud-platform-northstar':
-        prefisso = "🔴 *[PROD]* - "
+        prefisso = "🚀 *[PROD]* - "
     elif 'test' in PROJECT_ID.lower():
         prefisso = "🧪 *[TEST]* - "
     else:
@@ -76,16 +76,13 @@ def drive_to_gcp(request):
     bucket_name = request_json['bucket_name']
     
     try:
-        # 1. Autenticazione automatica tramite il Service Account
+        # 1. Autenticazione tramite il Service Account
         credentials, project = google.auth.default(scopes=SCOPES)
-        
-        # Inizializzazione dei client
         drive_service = build('drive', 'v3', credentials=credentials)
         storage_client = storage.Client(project=project)
         
         print(f"Recupero della lista dei file dalla cartella Drive: {folder_id}...")
         
-        # Query per cercare i file nella cartella che non sono nel cestino
         query = f"'{folder_id}' in parents and trashed = false"
         
         results = drive_service.files().list(
@@ -103,10 +100,8 @@ def drive_to_gcp(request):
             invia_notifica_telegram("🚨 *Errore Cloud Function!*\nNessun file trovato nella cartella indicata. Verifica la condivisione con il Service Account.")
             return f"Nessun file trovato.", 404
         
-        # 2. Ordinamento dei file per nome (alfabetico)
         files.sort(key=lambda x: x['name'].lower())
         
-        # 3. Selezione dell'ultimo file
         target_file = files[-1]
         file_id = target_file['id']
         original_name = target_file['name']
@@ -115,7 +110,6 @@ def drive_to_gcp(request):
         
         print(f"File selezionato: {original_name} (ID: {file_id}, Creato il: {created_time_str})")
 
-        # 4. Controllo dei 7 giorni
         if created_time_str:
             file_date = datetime.fromisoformat(created_time_str.replace('Z', '+00:00'))
             now_utc = datetime.now(timezone.utc)
@@ -129,10 +123,8 @@ def drive_to_gcp(request):
                     "messaggio": messaggio_blocco
                 }, 200
         
-        # Determina il nome di destinazione nel bucket
         destination_blob_name = "export_latest.zip"
         
-        # 6. Download del file da Drive in memoria
         print(f"Download di '{original_name}' da Google Drive...")
         
         drive_request = drive_service.files().get_media(
@@ -151,7 +143,6 @@ def drive_to_gcp(request):
         file_buffer.seek(0)
         print("Download completato.")
         
-        # 7. Upload su Cloud Storage
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(destination_blob_name)
         print(f"Caricamento su GCS in '{bucket_name}' come '{destination_blob_name}'...")

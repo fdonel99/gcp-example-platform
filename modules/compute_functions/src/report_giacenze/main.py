@@ -9,15 +9,13 @@ import functions_framework
 
 @functions_framework.http
 def report_giacenze(request):
-    # 1. Lettura del project_id
     project_id = os.environ.get('GOOGLE_CLOUD_PROJECT', '')
     
     if not project_id:
         return "Errore: GOOGLE_CLOUD_PROJECT non configurato.", 500
 
     dataset_table = 'NORTHSTAR.REPORT_GIACENZE'
-    
-    # 2. Impostazione dell'ID del Google Sheet
+
     if 'test' in project_id.lower():
         sheet_id = '1Ay1tjHrreEsM-Z1TBhnrg760czJSL9fOXt_VKtZDBeY' 
         print(f"Ambiente di TEST rilevato. Uso Sheet ID: {sheet_id}")
@@ -28,7 +26,6 @@ def report_giacenze(request):
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
     sheet_name = f'REPORT_GIACENZE_{today_str}'
 
-    # === LA TUA QUERY SQL CON LTRIM SU SKU ===
     sql_create_table = f"""
         CREATE OR REPLACE TABLE `{project_id}.{dataset_table}` AS (
             SELECT 
@@ -51,13 +48,11 @@ def report_giacenze(request):
     """
 
     try:
-        # FASE 1: Ricrea tabella su BQ
         bq_client = bigquery.Client(project=project_id)
         print("1. Ricreazione tabella su BigQuery in corso...")
         bq_client.query(sql_create_table).result()
         print("Tabella creata con successo.")
 
-        # FASE 2: Estrazione dati
         print("2. Scaricamento dati nel dataframe...")
         query_select = f"SELECT * FROM `{project_id}.{dataset_table}`"
         df = bq_client.query(query_select).to_dataframe()
@@ -69,7 +64,6 @@ def report_giacenze(request):
             print("Pulizia caratteri e NaN...")
             df = df.replace(r'[\x00-\x08\x0b-\x0c\x0e-\x1f]', '', regex=True)
 
-        # FASE 3: Connessione a GSheets
         print(f"3. Connessione a Google Sheets...")
         credentials, _ = google.auth.default(scopes=[
             'https://www.googleapis.com/auth/spreadsheets',
@@ -78,14 +72,11 @@ def report_giacenze(request):
         gc = gspread.authorize(credentials)
         sh = gc.open_by_key(sheet_id)
 
-        # FASE 4: Scrittura foglio odierno
         print(f"4. Creazione foglio: '{sheet_name}'...")
         
-        # Recupera tutti i fogli esistenti
         tutti_i_fogli = sh.worksheets()
         worksheet_oggi = None
         
-        # Cerca se il foglio esiste già, ignorando maiuscole e minuscole!
         for ws in tutti_i_fogli:
             if ws.title.lower() == sheet_name.lower():
                 worksheet_oggi = ws
@@ -96,14 +87,20 @@ def report_giacenze(request):
             worksheet_oggi.clear()
         else:
             print("Il foglio non esiste. Lo creo in posizione 0...")
-            # Crea il foglio in posizione 0 (il primo a sinistra)
             worksheet_oggi = sh.add_worksheet(title=sheet_name, rows=len(df)+1, cols=len(df.columns), index=0)
 
         print("Scrittura dati in corso...")
         set_with_dataframe(worksheet_oggi, df, include_index=False, include_column_header=True)
         print("Scrittura completata.")
 
-        # FASE 5: Pulizia
+        print("Aggiornamento del filtro di Google Sheets...")
+        try:
+            worksheet_oggi.clear_basic_filter()
+        except Exception:
+            pass 
+            
+        worksheet_oggi.set_basic_filter()
+
         print("5. Controllo e pulizia fogli...")
         for nome_predefinito in ["Foglio1", "Sheet1"]:
             try:

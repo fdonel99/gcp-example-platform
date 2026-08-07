@@ -127,6 +127,17 @@ def report_fornitori(request):
         print("Scrittura dati in corso...")
         set_with_dataframe(worksheet_oggi, df, include_index=False, include_column_header=True)
         print("Scrittura completata.")
+        
+        # --- AGGIORNAMENTO FILTRO ---
+        print("Aggiornamento del filtro di Google Sheets...")
+        try:
+            # 1. Rimuove eventuali filtri rimasti incastrati
+            worksheet_oggi.clear_basic_filter()
+        except Exception:
+            pass # Se non c'era nessun filtro, ignora e va avanti
+            
+        # 2. Applica un nuovo filtro dinamico sull'intero dataset
+        worksheet_oggi.set_basic_filter()
 
         # FASE 5: Pulizia dei fogli vecchi (massimo 10 fogli) e rimozione "Foglio1"
         print("5. Controllo e pulizia fogli...")

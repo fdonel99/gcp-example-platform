@@ -41,7 +41,8 @@ def anagrafica_prodotto(request):
               "&amp;": "&", "&#38;": "&", "&lt;": "<", "&#60;": "<", "&gt;": ">", "&#62;": ">",
               "&agrave;": "à", "&egrave;": "è", "&eacute;": "é", "&igrave;": "ì", "&ograve;": "ò", "&ugrave;": "ù",
               "&Agrave;": "À", "&Egrave;": "È", "&Eacute;": "É", "&Igrave;": "Ì", "&Ograve;": "Ò", "&Ugrave;": "Ù",
-              "&nbsp;": " ", "&#160;": " ", "&euro;": "€", "&#8364;": "€", "&copy;": "©", "&reg;": "®"
+              "&nbsp;": " ", "&#160;": " ", "&euro;": "€", "&#8364;": "€", "&copy;": "©", "&reg;": "®",
+              "&ndash;": "-", "&#8211;": "-"
           }};
           return testo.replace(/&[#A-Za-z0-9]+;/g, function(match) {{
               return entities[match] || match; 
@@ -178,6 +179,18 @@ def anagrafica_prodotto(request):
         # Usa set_with_dataframe (molto più veloce del caricamento riga per riga)
         set_with_dataframe(worksheet_oggi, df, include_index=False, include_column_header=True)
         print("Scrittura completata.")
+
+        # --- NUOVA SEZIONE: Aggiornamento automatico del filtro ---
+        print("Aggiornamento del filtro di Google Sheets...")
+        try:
+            # 1. Rimuove eventuali filtri rimasti incastrati dalle esecuzioni precedenti
+            worksheet_oggi.clear_basic_filter()
+        except Exception:
+            pass # Se non c'era nessun filtro, ignora l'errore e va avanti
+            
+        # 2. Applica un nuovo filtro pulito che copre automaticamente tutti i dati appena caricati
+        worksheet_oggi.set_basic_filter()
+        # ----------------------------------------------------------
 
         # FASE 5: Pulizia dei fogli vecchi (massimo 10 fogli)
         print("5. Controllo storico fogli (Max 10 consentiti)...")
