@@ -5,9 +5,9 @@ locals {
   is_test = var.environment == "test" ? true : false
 }
 
-resource "google_storage_bucket" "export_ns_zip" {
+resource "google_storage_bucket" "import_ns_zip" {
   project                     = var.project_id
-  name                        = var.environment == "prod" ? "bkt-export-ns-zip" : "bkt-export-ns-zip-${var.project_id}"
+  name                        = var.environment == "prod" ? "bkt-import-ns-zip" : "bkt-import-ns-zip-${var.project_id}"
   location                    = "EU"
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true

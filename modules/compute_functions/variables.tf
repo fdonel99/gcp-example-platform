@@ -24,9 +24,9 @@ variable "bucket_codice_funzioni_name" {
   description = "Il nome del bucket dove caricare i file .zip delle funzioni"
 }
 
-variable "bucket_export_ns_zip_name" {
+variable "bucket_import_ns_zip_name" {
   type        = string
-  description = "Il nome del bucket per l'export degli ZIP (usato per il mount GCS FUSE)"
+  description = "Il nome del bucket per l'import degli ZIP (usato per il mount GCS FUSE)"
 }
 
 variable "bucket_spese_trasporto_name" {

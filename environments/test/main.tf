@@ -43,7 +43,7 @@ module "compute_functions" {
   # Variabili passate dagli ALTRI moduli:
   cloud_worker_sa_email          = module.setup.cloud_worker_sa_email
   bucket_codice_funzioni_name    = module.data_storage.bucket_codice_funzioni_name
-  bucket_export_ns_zip_name      = module.data_storage.bucket_export_ns_zip_name
+  bucket_import_ns_zip_name      = module.data_storage.bucket_export_ns_zip_name
   bucket_spese_trasporto_name    = module.data_storage.bucket_spese_trasporto_name
   bucket_infografica_input_name  = module.data_storage.bucket_infografica_input_name
   bucket_infografica_output_name = module.data_storage.bucket_infografica_output_name
@@ -63,7 +63,7 @@ module "orchestration" {
   
   # Variabili passate dagli ALTRI moduli:
   cloud_worker_sa_email           = module.setup.cloud_worker_sa_email
-  bucket_export_ns_zip_name       = module.data_storage.bucket_export_ns_zip_name
+  bucket_import_ns_zip_name       = module.data_storage.bucket_import_ns_zip_name
   drive_folder_id                 = var.drive_folder_id
   
   # URI generati dal modulo Compute Functions

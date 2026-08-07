@@ -43,7 +43,7 @@ variable "function_tables_loading_uri" {
   description = "L'URI della Cloud Function Tables Loading (generata nel modulo compute)"
 }
 
-variable "bucket_export_ns_zip_name" {
+variable "bucket_import_ns_zip_name" {
   type        = string
   description = "Il nome del bucket per l'export degli ZIP (passato allo scheduler per la funzione Drive to GCP)"
 }

@@ -18,8 +18,8 @@ output "bucket_spese_trasporto_name" {
   value       = google_storage_bucket.spese_trasporto.name
 }
 
-output "bucket_export_ns_zip_name" {
-  value = google_storage_bucket.export_ns_zip.name
+output "bucket_import_ns_zip_name" {
+  value = google_storage_bucket.import_ns_zip.name
 }
 output "bucket_infografica_input_name" {
   value = google_storage_bucket.infografica_input.name

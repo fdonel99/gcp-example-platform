@@ -46,7 +46,7 @@ resource "google_cloudfunctions2_function" "function_tables_loading" {
     # Variabili d'ambiente in chiaro
     environment_variables = {
       DATASET_ID  = "NORTHSTAR"
-      BUCKET_NAME = var.bucket_export_ns_zip_name
+      BUCKET_NAME = var.bucket_import_ns_zip_name
       SHEET_ID    = "1ptH6m4mS6UozgrtRUfoP_wMMwbx7wTiIn1T6eJ0Vy1c" 
       GOOGLE_CLOUD_PROJECT = var.project_id
     }
@@ -79,7 +79,7 @@ resource "null_resource" "mount_gcs_fuse_volume" {
       gcloud run services update ${google_cloudfunctions2_function.function_tables_loading.name} \
         --project=${var.project_id} \
         --region=${google_cloudfunctions2_function.function_tables_loading.location} \
-        --add-volume=name=bucket-zip,type=cloud-storage,bucket=${var.bucket_export_ns_zip_name} \
+        --add-volume=name=bucket-zip,type=cloud-storage,bucket=${var.bucket_import_ns_zip_name} \
         --add-volume-mount=volume=bucket-zip,mount-path=/mnt/bucket \
         --execution-environment=gen2 \
         --quiet
