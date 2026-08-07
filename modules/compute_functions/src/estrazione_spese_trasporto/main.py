@@ -14,14 +14,12 @@ import google.auth
 import gspread
 from gspread_dataframe import set_with_dataframe, get_as_dataframe
 
-# Inizializzazione Client Cloud Storage
 storage_client = storage.Client()
 PROJECT_ID = os.environ.get('PROJECT_ID')
 VERTEX_LOCATION = 'europe-west4' 
 vertexai.init(project=PROJECT_ID, location=VERTEX_LOCATION)
 SPREADSHEET_ID = os.environ.get('SPREADSHEET_ID', '1TYpxmD6H_9v-ZeeOqSZqiHF50cyzj6xpg51zTaTEQWE')
 
-# Autenticazione in Google Cloud per accedere a Sheets
 credentials, _ = google.auth.default(scopes=[
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
@@ -166,7 +164,6 @@ def estrai_tariffe_pdf(cloud_event):
 
     source_bucket = storage_client.bucket(source_bucket_name)
     
-    # Pulizia del bucket (mantiene solo l'ultimo file caricato)
     try:
         tutti_i_file = source_bucket.list_blobs()
         for file_esistente in tutti_i_file:

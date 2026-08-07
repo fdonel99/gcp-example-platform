@@ -9,13 +9,10 @@ from googleapiclient.http import MediaIoBaseDownload
 from google.cloud import storage
 import google.auth
 
-# Forza aggiornamento zip
 # --- CONFIGURAZIONE TELEGRAM E AMBIENTE ---
-# I segreti ora vengono letti ESCLUSIVAMENTE dalle variabili d'ambiente (Secret Manager)
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
-# Recupera in automatico l'ID del progetto in cui sta girando la Cloud Function
 PROJECT_ID = os.environ.get('GOOGLE_CLOUD_PROJECT', '')
 
 def invia_notifica_telegram(messaggio):
@@ -24,7 +21,6 @@ def invia_notifica_telegram(messaggio):
         print("Telegram non configurato (Token o Chat ID mancanti). Salto invio notifica.")
         return
 
-    # Determina il prefisso dinamico leggendo il nome del progetto
     if 'prod' in PROJECT_ID.lower() or PROJECT_ID == 'cloud-platform-northstar':
         prefisso = "🚀 *[PROD]* - "
     elif 'test' in PROJECT_ID.lower():
@@ -48,7 +44,6 @@ def invia_notifica_telegram(messaggio):
     except Exception as e:
         print(f"⚠️ Errore durante l'invio della notifica Telegram: {e}")
 
-# Scope necessari per accedere a Google Drive in sola lettura
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 
 @functions_framework.http

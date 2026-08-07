@@ -9,7 +9,6 @@ import functions_framework
 
 @functions_framework.http
 def report_fornitori(request):
-    # 1. Lettura del project_id per determinare l'ambiente
     project_id = os.environ.get('GOOGLE_CLOUD_PROJECT', '')
     
     if not project_id:
@@ -17,7 +16,6 @@ def report_fornitori(request):
 
     dataset_table = 'NORTHSTAR.REPORT_FORNITORI'
     
-    # 2. Impostazione dell'ID del Google Sheet in base all'ambiente
     if 'test' in project_id.lower():
         sheet_id = '1Cf6rwBtMeKp5acTnb62X6r9WAPJeUnK5yKVLoh18LJQ'
         print(f"Ambiente di TEST rilevato. Uso Sheet ID: {sheet_id}")
@@ -25,12 +23,9 @@ def report_fornitori(request):
         sheet_id = '1o0nppIt-GPVMyXg48XmTBC8wU3sapJFdZH7Wpj4fZ84'
         print(f"Ambiente di PROD rilevato. Uso Sheet ID: {sheet_id}")
     
-    # Nome del foglio per l'esecuzione odierna
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
     sheet_name = f'REPORT_FORNITORI_{today_str}'
 
-    # === LA TUA QUERY SQL AGGIORNATA CON RTRIM ===
-    # Creiamo solo la tabella su BigQuery, l'esportazione la fa Python
     sql_create_table = f"""
         CREATE OR REPLACE TABLE `{project_id}.{dataset_table}` AS ( 
           SELECT 
@@ -75,13 +70,11 @@ def report_fornitori(request):
     """
 
     try:
-        # FASE 1: Ricrea la tabella aggiornata su BigQuery
         bq_client = bigquery.Client(project=project_id)
         print("1. Ricreazione tabella su BigQuery in corso...")
         bq_client.query(sql_create_table).result()
         print("Tabella creata con successo.")
 
-        # FASE 2: Estrae i dati
         print("2. Scaricamento dati nel dataframe...")
         query_select = f"SELECT * FROM `{project_id}.{dataset_table}`"
         df = bq_client.query(query_select).to_dataframe()
@@ -92,9 +85,7 @@ def report_fornitori(request):
         else:
             print("Pulizia dei caratteri di controllo non supportati...")
             df = df.replace(r'[\x00-\x08\x0b-\x0c\x0e-\x1f]', '', regex=True)
-            # Sostituzione NaN con stringhe vuote per Google Sheets
 
-        # FASE 3: Autenticazione e connessione a Google Sheets
         print(f"3. Connessione a Google Sheets (ID: {sheet_id})...")
         credentials, _ = google.auth.default(scopes=[
             'https://www.googleapis.com/auth/spreadsheets',
@@ -103,14 +94,11 @@ def report_fornitori(request):
         gc = gspread.authorize(credentials)
         sh = gc.open_by_key(sheet_id)
 
-        # FASE 4: Gestione del foglio per i dati di oggi
         print(f"4. Creazione del nuovo foglio: '{sheet_name}'...")
         
-        # Recupera tutti i fogli esistenti
         tutti_i_fogli = sh.worksheets()
         worksheet_oggi = None
         
-        # Cerca se il foglio esiste già, ignorando maiuscole e minuscole!
         for ws in tutti_i_fogli:
             if ws.title.lower() == sheet_name.lower():
                 worksheet_oggi = ws
@@ -121,28 +109,22 @@ def report_fornitori(request):
             worksheet_oggi.clear()
         else:
             print("Il foglio non esiste. Lo creo in posizione 0...")
-            # Crea il foglio in posizione 0 (il primo a sinistra)
             worksheet_oggi = sh.add_worksheet(title=sheet_name, rows=len(df)+1, cols=len(df.columns), index=0)
 
         print("Scrittura dati in corso...")
         set_with_dataframe(worksheet_oggi, df, include_index=False, include_column_header=True)
         print("Scrittura completata.")
         
-        # --- AGGIORNAMENTO FILTRO ---
         print("Aggiornamento del filtro di Google Sheets...")
         try:
-            # 1. Rimuove eventuali filtri rimasti incastrati
             worksheet_oggi.clear_basic_filter()
         except Exception:
-            pass # Se non c'era nessun filtro, ignora e va avanti
-            
-        # 2. Applica un nuovo filtro dinamico sull'intero dataset
+            pass 
+
         worksheet_oggi.set_basic_filter()
 
-        # FASE 5: Pulizia dei fogli vecchi (massimo 10 fogli) e rimozione "Foglio1"
         print("5. Controllo e pulizia fogli...")
         
-        # Eliminazione del foglio predefinito vuoto (Foglio1 / Sheet1)
         fogli_predefiniti = ["Foglio1", "Sheet1"]
         for nome_predefinito in fogli_predefiniti:
             try:
@@ -153,7 +135,6 @@ def report_fornitori(request):
             except gspread.exceptions.WorksheetNotFound:
                 pass
 
-        # Recuperiamo la lista aggiornata dei fogli
         tutti_i_fogli = sh.worksheets()
         
         print("Controllo storico fogli (Max 10 consentiti)...")

@@ -21,19 +21,16 @@ import google.auth
 import gspread
 
 # --- CONFIGURAZIONE TELEGRAM E AMBIENTE ---
-# I segreti ora vengono letti ESCLUSIVAMENTE dalle variabili d'ambiente (Secret Manager)
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
-# GOOGLE_CLOUD_PROJECT è iniettato in automatico da Cloud Functions
 PROJECT_ID = os.environ.get('GOOGLE_CLOUD_PROJECT', '')
 
-# Anche queste configurazioni ora dipendono dalle variabili passate da Terraform
 DATASET_ID = os.environ.get('DATASET_ID')
 BUCKET_NAME = os.environ.get('BUCKET_NAME')
-SHEET_ID = os.environ.get('SHEET_ID', '1ptH6m4mS6UozgrtRUfoP_wMMwbx7wTiIn1T6eJ0Vy1c') # Consigliato passare anche questo via TF
+SHEET_ID = os.environ.get('SHEET_ID', '1ptH6m4mS6UozgrtRUfoP_wMMwbx7wTiIn1T6eJ0Vy1c') 
 
-MOUNT_PATH = '/mnt/bucket'    # Percorso GCS Fuse fisso
+MOUNT_PATH = '/mnt/bucket'    
 
 def invia_notifica_telegram(messaggio):
     """Invia un messaggio di testo tramite il bot Telegram con prefisso ambiente."""
@@ -41,7 +38,6 @@ def invia_notifica_telegram(messaggio):
         print("Telegram non configurato (Token o Chat ID mancanti). Salto invio notifica.")
         return
 
-    # Determina il prefisso dinamico leggendo il nome del progetto
     if 'prod' in PROJECT_ID.lower() or PROJECT_ID == 'cloud-platform-northstar':
         prefisso = "🚀 *[PROD]* - "
     elif 'test' in PROJECT_ID.lower():
