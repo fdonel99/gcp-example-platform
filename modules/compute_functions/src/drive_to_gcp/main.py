@@ -25,7 +25,7 @@ def invia_notifica_telegram(messaggio):
         return
 
     # Determina il prefisso dinamico leggendo il nome del progetto
-    if 'prod' in PROJECT_ID.lower():
+    if 'prod' in PROJECT_ID.lower() or PROJECT_ID == 'cloud-platform-northstar':
         prefisso = "🔴 *[PROD]* - "
     elif 'test' in PROJECT_ID.lower():
         prefisso = "🧪 *[TEST]* - "
