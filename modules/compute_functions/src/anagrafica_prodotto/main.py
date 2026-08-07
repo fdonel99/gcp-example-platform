@@ -2,14 +2,14 @@ import datetime
 import os
 import pandas as pd
 from google.cloud import bigquery
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 import google.auth
+import gspread
+from gspread_dataframe import set_with_dataframe
 import functions_framework
 
 @functions_framework.http
 def anagrafica_prodotto(request):
-    # Correggi il project_id in modo che venga letto dinamicamente
+    # 1. Lettura del project_id per determinare l'ambiente
     project_id = os.environ.get('GOOGLE_CLOUD_PROJECT', '')
     
     if not project_id:
@@ -17,19 +17,19 @@ def anagrafica_prodotto(request):
 
     dataset_table = 'NORTHSTAR.ANAGRAFICA_PRODOTTO'
     
-    # Imposta la folder in base all'ambiente
+    # 2. Impostazione dell'ID del Google Sheet in base all'ambiente
     if 'test' in project_id.lower():
-        folder_id = '1OsVs9o9e3C0X85gdKdeGiUgvYdTDF4mA'
-        print("Ambiente di TEST rilevato. Uso cartella Drive di test.")
+        sheet_id = '1EKLLgHBo3zIdbgMOhThjR54J15UngDdRXix79FOP5DY'
+        print(f"Ambiente di TEST rilevato. Uso Sheet ID: {sheet_id}")
     else:
-        folder_id = '1t-6TbVqa4IQfEA2-MMbQfF0483OoxeMk'
-        print("Ambiente di PROD rilevato. Uso cartella Drive di produzione.")
+        sheet_id = '16a2zUbm-dVfHHxLIa9F0uE-VNDUQNQplxr5_i_S69ps'
+        print(f"Ambiente di PROD rilevato. Uso Sheet ID: {sheet_id}")
     
+    # Nome del foglio per l'esecuzione odierna
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
-    file_name = f'anagrafica_prodotto_{today_str}.xlsx'
-    local_file_path = f'/tmp/{file_name}'
+    sheet_name = f'anagrafica_{today_str}'
 
-    # === LA TUA QUERY SQL COMPLETA ===
+    # === LA TUA QUERY SQL COMPLETA INVARIATA ===
     sql_create_table = f"""
         -- 1. Funzione di decodifica HTML
         CREATE TEMP FUNCTION HTML_DECODE(testo STRING) 
@@ -129,49 +129,62 @@ def anagrafica_prodotto(request):
     """
 
     try:
+        # FASE 1: Ricrea la tabella aggiornata su BigQuery
         bq_client = bigquery.Client(project=project_id)
-        
-        # FASE 1: Ricrea la tabella aggiornata su BigQuery (usando i server di BigQuery)
         print("1. Ricreazione tabella su BigQuery in corso...")
-        # L'istruzione .result() mette in pausa Python finché BigQuery non ha finito
         bq_client.query(sql_create_table).result()
         print("Tabella creata con successo.")
 
-        # FASE 2: Estrae i dati già puliti e perfetti in un dataframe
+        # FASE 2: Estrae i dati
         print("2. Scaricamento dati nel dataframe...")
         query_select = f"SELECT * FROM `{project_id}.{dataset_table}`"
         df = bq_client.query(query_select).to_dataframe()
 
-        print("Pulizia dei caratteri di controllo non supportati da Excel...")
-        # Questa riga usa una regex per eliminare i caratteri ASCII da 0 a 31 (tranne tab e a capo)
+        # Pulizia caratteri non supportati (Google Sheets usa comunque questa regola per evitare errori di decodifica)
+        print("Pulizia dei caratteri di controllo non supportati...")
         df = df.replace(r'[\x00-\x08\x0b-\x0c\x0e-\x1f]', '', regex=True)
 
-        # FASE 3: Crea il file Excel vero e proprio
-        print("3. Generazione file Excel in formato .xlsx...")
-        df.to_excel(local_file_path, index=False, engine='openpyxl')
+        # FASE 3: Autenticazione e connessione a Google Sheets
+        print(f"3. Connessione a Google Sheets (ID: {sheet_id})...")
+        credentials, _ = google.auth.default(scopes=[
+            'https://www.googleapis.com/auth/spreadsheets',
+            'https://www.googleapis.com/auth/drive'
+        ])
+        gc = gspread.authorize(credentials)
+        sh = gc.open_by_key(sheet_id)
 
-        # FASE 4: Carica su Google Drive
-        print("4. Caricamento su Google Drive...")
-        credentials, _ = google.auth.default()
-        drive_service = build('drive', 'v3', credentials=credentials)
-
-        file_metadata = {
-            'name': file_name,
-            'parents': [folder_id]
-        }
+        # FASE 4: Gestione dei fogli (Logica di Inserimento a sinistra e Ritenzione 10 giorni)
+        print(f"4. Creazione del nuovo foglio: '{sheet_name}'...")
         
-        media = MediaFileUpload(
-            local_file_path, 
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        
-        file = drive_service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id'
-        ).execute()
+        # Cerca se esiste già un foglio con la data di oggi (per evitare errori in caso di ri-esecuzioni manuali)
+        try:
+            worksheet_oggi = sh.worksheet(sheet_name)
+            print(f"Il foglio {sheet_name} esiste già. Lo svuoto...")
+            worksheet_oggi.clear()
+        except gspread.exceptions.WorksheetNotFound:
+            # Crea il foglio in posizione 0 (il primo a sinistra)
+            worksheet_oggi = sh.add_worksheet(title=sheet_name, rows=len(df)+1, cols=len(df.columns), index=0)
 
-        messaggio = f"Successo! Tabella aggiornata ed Excel caricato con ID: {file.get('id')}"
+        print("Caricamento del dataframe sul foglio...")
+        # Usa set_with_dataframe (molto più veloce del caricamento riga per riga di base di gspread)
+        set_with_dataframe(worksheet_oggi, df)
+        print("Caricamento completato.")
+
+        # FASE 5: Pulizia dei fogli vecchi (massimo 10 fogli)
+        print("5. Controllo storico fogli (Max 10 consentiti)...")
+        tutti_i_fogli = sh.worksheets()
+        
+        # Se abbiamo più di 10 fogli
+        if len(tutti_i_fogli) > 10:
+            # I fogli sono ordinati da sinistra a destra, quindi i più vecchi sono in fondo alla lista
+            fogli_da_eliminare = tutti_i_fogli[10:]
+            for foglio in fogli_da_eliminare:
+                print(f"Eliminazione del foglio vecchio: '{foglio.title}'...")
+                sh.del_worksheet(foglio)
+        else:
+            print(f"Fogli attuali: {len(tutti_i_fogli)}. Nessuna pulizia necessaria.")
+
+        messaggio = f"Successo! Dati caricati nel foglio '{sheet_name}' e storico ottimizzato."
         print(messaggio)
         return (messaggio, 200)
 
