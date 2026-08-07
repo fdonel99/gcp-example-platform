@@ -18,7 +18,6 @@ def report_giacenze(request):
     dataset_table = 'NORTHSTAR.REPORT_GIACENZE'
     
     # 2. Impostazione dell'ID del Google Sheet
-    # ⚠️ ATTENZIONE: INSERISCI QUI GLI ID REALI DEI FOGLI CHE HAI CREATO ⚠️
     if 'test' in project_id.lower():
         sheet_id = '1Ay1tjHrreEsM-Z1TBhnrg760czJSL9fOXt_VKtZDBeY' 
         print(f"Ambiente di TEST rilevato. Uso Sheet ID: {sheet_id}")
@@ -69,7 +68,6 @@ def report_giacenze(request):
         else:
             print("Pulizia caratteri e NaN...")
             df = df.replace(r'[\x00-\x08\x0b-\x0c\x0e-\x1f]', '', regex=True)
-            df = df.fillna('')
 
         # FASE 3: Connessione a GSheets
         print(f"3. Connessione a Google Sheets...")
@@ -82,12 +80,26 @@ def report_giacenze(request):
 
         # FASE 4: Scrittura foglio odierno
         print(f"4. Creazione foglio: '{sheet_name}'...")
-        try:
-            worksheet_oggi = sh.worksheet(sheet_name)
+        
+        # Recupera tutti i fogli esistenti
+        tutti_i_fogli = sh.worksheets()
+        worksheet_oggi = None
+        
+        # Cerca se il foglio esiste già, ignorando maiuscole e minuscole!
+        for ws in tutti_i_fogli:
+            if ws.title.lower() == sheet_name.lower():
+                worksheet_oggi = ws
+                break
+                
+        if worksheet_oggi:
+            print(f"Il foglio '{worksheet_oggi.title}' esiste già. Lo svuoto per sovrascriverlo...")
             worksheet_oggi.clear()
-        except gspread.exceptions.WorksheetNotFound:
+        else:
+            print("Il foglio non esiste. Lo creo in posizione 0...")
+            # Crea il foglio in posizione 0 (il primo a sinistra)
             worksheet_oggi = sh.add_worksheet(title=sheet_name, rows=len(df)+1, cols=len(df.columns), index=0)
 
+        print("Scrittura dati in corso...")
         set_with_dataframe(worksheet_oggi, df, include_index=False, include_column_header=True)
         print("Scrittura completata.")
 
@@ -98,14 +110,20 @@ def report_giacenze(request):
                 foglio_vuoto = sh.worksheet(nome_predefinito)
                 if len(sh.worksheets()) > 1:
                     sh.del_worksheet(foglio_vuoto)
+                    print(f"Foglio di default '{nome_predefinito}' eliminato con successo.")
             except gspread.exceptions.WorksheetNotFound:
                 pass
 
         tutti_i_fogli = sh.worksheets()
+        
+        print("Controllo storico fogli (Max 10 consentiti)...")
         if len(tutti_i_fogli) > 10:
             fogli_da_eliminare = tutti_i_fogli[10:]
             for foglio in fogli_da_eliminare:
+                print(f"Eliminazione del foglio vecchio: '{foglio.title}'...")
                 sh.del_worksheet(foglio)
+        else:
+            print(f"Fogli attuali: {len(tutti_i_fogli)}. Nessuna pulizia necessaria.")
 
         messaggio = f"Successo! Dati caricati nel foglio '{sheet_name}'."
         print(messaggio)

@@ -140,8 +140,8 @@ def anagrafica_prodotto(request):
         query_select = f"SELECT * FROM `{project_id}.{dataset_table}`"
         df = bq_client.query(query_select).to_dataframe()
 
-        # Pulizia caratteri non supportati (Google Sheets usa comunque questa regola per evitare errori di decodifica)
-        print("Pulizia dei caratteri di controllo non supportati...")
+        print("Pulizia dei caratteri di controllo e formattazione NaN...")
+        # Pulizia caratteri non supportati
         df = df.replace(r'[\x00-\x08\x0b-\x0c\x0e-\x1f]', '', regex=True)
 
         # FASE 3: Autenticazione e connessione a Google Sheets
@@ -153,22 +153,31 @@ def anagrafica_prodotto(request):
         gc = gspread.authorize(credentials)
         sh = gc.open_by_key(sheet_id)
 
-        # FASE 4: Gestione dei fogli (Logica di Inserimento a sinistra e Ritenzione 10 giorni)
+        # FASE 4: Gestione del foglio per i dati di oggi
         print(f"4. Creazione del nuovo foglio: '{sheet_name}'...")
         
-        # Cerca se esiste già un foglio con la data di oggi (per evitare errori in caso di ri-esecuzioni manuali)
-        try:
-            worksheet_oggi = sh.worksheet(sheet_name)
-            print(f"Il foglio {sheet_name} esiste già. Lo svuoto...")
+        # Recupera tutti i fogli esistenti
+        tutti_i_fogli = sh.worksheets()
+        worksheet_oggi = None
+        
+        # Cerca se il foglio esiste già, ignorando maiuscole e minuscole!
+        for ws in tutti_i_fogli:
+            if ws.title.lower() == sheet_name.lower():
+                worksheet_oggi = ws
+                break
+                
+        if worksheet_oggi:
+            print(f"Il foglio '{worksheet_oggi.title}' esiste già. Lo svuoto per sovrascriverlo...")
             worksheet_oggi.clear()
-        except gspread.exceptions.WorksheetNotFound:
+        else:
+            print("Il foglio non esiste. Lo creo in posizione 0...")
             # Crea il foglio in posizione 0 (il primo a sinistra)
             worksheet_oggi = sh.add_worksheet(title=sheet_name, rows=len(df)+1, cols=len(df.columns), index=0)
 
-        print("Caricamento del dataframe sul foglio...")
-        # Usa set_with_dataframe (molto più veloce del caricamento riga per riga di base di gspread)
-        set_with_dataframe(worksheet_oggi, df)
-        print("Caricamento completato.")
+        print("Scrittura dati in corso...")
+        # Usa set_with_dataframe (molto più veloce del caricamento riga per riga)
+        set_with_dataframe(worksheet_oggi, df, include_index=False, include_column_header=True)
+        print("Scrittura completata.")
 
         # FASE 5: Pulizia dei fogli vecchi (massimo 10 fogli)
         print("5. Controllo storico fogli (Max 10 consentiti)...")

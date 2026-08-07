@@ -93,7 +93,6 @@ def report_fornitori(request):
             print("Pulizia dei caratteri di controllo non supportati...")
             df = df.replace(r'[\x00-\x08\x0b-\x0c\x0e-\x1f]', '', regex=True)
             # Sostituzione NaN con stringhe vuote per Google Sheets
-            df = df.fillna('')
 
         # FASE 3: Autenticazione e connessione a Google Sheets
         print(f"3. Connessione a Google Sheets (ID: {sheet_id})...")
@@ -106,11 +105,22 @@ def report_fornitori(request):
 
         # FASE 4: Gestione del foglio per i dati di oggi
         print(f"4. Creazione del nuovo foglio: '{sheet_name}'...")
-        try:
-            worksheet_oggi = sh.worksheet(sheet_name)
-            print(f"Il foglio {sheet_name} esiste già. Lo svuoto...")
+        
+        # Recupera tutti i fogli esistenti
+        tutti_i_fogli = sh.worksheets()
+        worksheet_oggi = None
+        
+        # Cerca se il foglio esiste già, ignorando maiuscole e minuscole!
+        for ws in tutti_i_fogli:
+            if ws.title.lower() == sheet_name.lower():
+                worksheet_oggi = ws
+                break
+                
+        if worksheet_oggi:
+            print(f"Il foglio '{worksheet_oggi.title}' esiste già. Lo svuoto per sovrascriverlo...")
             worksheet_oggi.clear()
-        except gspread.exceptions.WorksheetNotFound:
+        else:
+            print("Il foglio non esiste. Lo creo in posizione 0...")
             # Crea il foglio in posizione 0 (il primo a sinistra)
             worksheet_oggi = sh.add_worksheet(title=sheet_name, rows=len(df)+1, cols=len(df.columns), index=0)
 
