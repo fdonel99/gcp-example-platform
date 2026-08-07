@@ -53,6 +53,7 @@ resource "google_cloud_scheduler_job" "schedulazione_export_anagrafica_prodotto"
   schedule         = "15 17 * * 0"
   time_zone        = "Europe/Rome"
   region           = var.region
+  attempt_deadline = "540s"
 
   http_target {
     http_method = "POST"
