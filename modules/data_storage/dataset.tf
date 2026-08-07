@@ -15,8 +15,8 @@ resource "google_bigquery_dataset" "dataset_principale" {
 
 resource "google_bigquery_dataset" "dataset_dati_storico" {
   project                    = var.project_id
-  dataset_id                 = "NORTHSTAR-STORICO" 
-  friendly_name              = "DM Northstar - ${title(var.environment)}"
+  dataset_id                 = "NORTHSTAR_STORICO" 
+  friendly_name              = "DM Northstar Storico - ${title(var.environment)}"
   description                = "Dataset con lo storico di dati passati (${var.environment})"
   location                   = "EU"
   
