@@ -45,6 +45,7 @@ resource "google_cloud_scheduler_job" "schedulazione_tables_loading" {
   }
 }
 
+# EXPORT ANAGRAFICA PRODOTTO
 resource "google_cloud_scheduler_job" "schedulazione_export_anagrafica_prodotto" {
   project          = var.project_id
   name             = "export-anagrafica-prodotto-scheduler-${var.environment}"

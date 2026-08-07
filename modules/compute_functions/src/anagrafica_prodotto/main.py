@@ -1,14 +1,29 @@
 import datetime
+import os
 import pandas as pd
 from google.cloud import bigquery
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 import google.auth
+import functions_framework
 
+@functions_framework.http
 def anagrafica_prodotto(request):
-    project_id = 'cloud-platform-northstar'
+    # Correggi il project_id in modo che venga letto dinamicamente
+    project_id = os.environ.get('GOOGLE_CLOUD_PROJECT', '')
+    
+    if not project_id:
+        return "Errore: GOOGLE_CLOUD_PROJECT non configurato.", 500
+
     dataset_table = 'NORTHSTAR.ANAGRAFICA_PRODOTTO'
-    folder_id = '1t-6TbVqa4IQfEA2-MMbQfF0483OoxeMk'
+    
+    # Imposta la folder in base all'ambiente
+    if 'test' in project_id.lower():
+        folder_id = '1OsVs9o9e3C0X85gdKdeGiUgvYdTDF4mA'
+        print("Ambiente di TEST rilevato. Uso cartella Drive di test.")
+    else:
+        folder_id = '1t-6TbVqa4IQfEA2-MMbQfF0483OoxeMk'
+        print("Ambiente di PROD rilevato. Uso cartella Drive di produzione.")
     
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
     file_name = f'anagrafica_prodotto_{today_str}.xlsx'
