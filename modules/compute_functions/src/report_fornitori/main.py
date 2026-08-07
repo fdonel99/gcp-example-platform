@@ -39,7 +39,8 @@ def report_fornitori(request):
             SAFE.PARSE_DATE('%Y%m%d', SUBSTR(MAX(DATAISO), 1, 8)) AS data_spedizione,
             SUM(SAFE_CAST(REPLACE(prezzo_totale, ',', '.') AS FLOAT64)) AS prezzo_totale,
             sum(qta_spedita) as tot_qta_spedita,
-            AVG(SAFE_CAST(REPLACE(PREZZO_UNITARIO, ',', '.') AS FLOAT64)) AS prezzo_unitario
+            AVG(SAFE_CAST(REPLACE(PREZZO_UNITARIO, ',', '.') AS FLOAT64)) AS prezzo_unitario,
+            SUM(CASE WHEN CAST(REPLACE(PREZZO_UNITARIO , "," , ".") AS FLOAT64) = 0 THEN qta_spedita ELSE 0 END) AS qta_gratuita
           FROM (
             SELECT 
               o.sku, 
