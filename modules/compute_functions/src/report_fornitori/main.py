@@ -31,7 +31,7 @@ def report_fornitori(request):
           SELECT 
             sku, 
             fornitore, 
-            costo, 
+            SAFE_CAST(REPLACE(costo, ',', '.') AS FLOAT64) AS costo,
             iva, 
             nazione_des,
             pagamento_def,
