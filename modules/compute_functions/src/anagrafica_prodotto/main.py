@@ -142,6 +142,10 @@ def anagrafica_prodotto(request):
         query_select = f"SELECT * FROM `{project_id}.{dataset_table}`"
         df = bq_client.query(query_select).to_dataframe()
 
+        print("Pulizia dei caratteri di controllo non supportati da Excel...")
+        # Questa riga usa una regex per eliminare i caratteri ASCII da 0 a 31 (tranne tab e a capo)
+        df = df.replace(r'[\x00-\x08\x0b-\x0c\x0e-\x1f]', '', regex=True)
+
         # FASE 3: Crea il file Excel vero e proprio
         print("3. Generazione file Excel in formato .xlsx...")
         df.to_excel(local_file_path, index=False, engine='openpyxl')
