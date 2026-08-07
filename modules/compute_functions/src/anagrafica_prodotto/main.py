@@ -16,16 +16,16 @@ def anagrafica_prodotto(request):
         return "Errore: GOOGLE_CLOUD_PROJECT non configurato.", 500
 
     dataset_table = 'NORTHSTAR.ANAGRAFICA_PRODOTTO'
+    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
     
     if 'test' in project_id.lower():
         sheet_id = '1EKLLgHBo3zIdbgMOhThjR54J15UngDdRXix79FOP5DY'
         print(f"Ambiente di TEST rilevato. Uso Sheet ID: {sheet_id}")
+        sheet_name = f'REPORT_FORNITORI_TEST_{today_str}'
     else:
         sheet_id = '16a2zUbm-dVfHHxLIa9F0uE-VNDUQNQplxr5_i_S69ps'
+        sheet_name = f'ANAGRAFICA_{today_str}'
         print(f"Ambiente di PROD rilevato. Uso Sheet ID: {sheet_id}")
-    
-    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
-    sheet_name = f'ANAGRAFICA_{today_str}'
 
     sql_create_table = f"""
         -- 1. Funzione di decodifica HTML

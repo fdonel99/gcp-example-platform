@@ -15,17 +15,17 @@ def report_fornitori(request):
         return "Errore: GOOGLE_CLOUD_PROJECT non configurato.", 500
 
     dataset_table = 'NORTHSTAR.REPORT_FORNITORI'
+    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
     
     if 'test' in project_id.lower():
         sheet_id = '1Cf6rwBtMeKp5acTnb62X6r9WAPJeUnK5yKVLoh18LJQ'
         print(f"Ambiente di TEST rilevato. Uso Sheet ID: {sheet_id}")
+        sheet_name = f'REPORT_FORNITORI_TEST_{today_str}'
     else:
         sheet_id = '1o0nppIt-GPVMyXg48XmTBC8wU3sapJFdZH7Wpj4fZ84'
         print(f"Ambiente di PROD rilevato. Uso Sheet ID: {sheet_id}")
+        sheet_name = f'REPORT_FORNITORI_{today_str}'
     
-    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
-    sheet_name = f'REPORT_FORNITORI_{today_str}'
-
     sql_create_table = f"""
         CREATE OR REPLACE TABLE `{project_id}.{dataset_table}` AS ( 
           SELECT 

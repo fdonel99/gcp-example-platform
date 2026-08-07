@@ -15,16 +15,18 @@ def report_giacenze(request):
         return "Errore: GOOGLE_CLOUD_PROJECT non configurato.", 500
 
     dataset_table = 'NORTHSTAR.REPORT_GIACENZE'
+    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
+    
 
     if 'test' in project_id.lower():
         sheet_id = '1Ay1tjHrreEsM-Z1TBhnrg760czJSL9fOXt_VKtZDBeY' 
+        sheet_name = f'REPORT_GIACENZE_TEST_{today_str}'
         print(f"Ambiente di TEST rilevato. Uso Sheet ID: {sheet_id}")
     else:
         sheet_id = '15O35KIgLTBjMj5XBxKxtL7a0w7gzbLV0rpX7-yeD1EQ'
         print(f"Ambiente di PROD rilevato. Uso Sheet ID: {sheet_id}")
+        sheet_name = f'REPORT_FORNITORI_{today_str}'
     
-    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
-    sheet_name = f'REPORT_GIACENZE_{today_str}'
 
     sql_create_table = f"""
         CREATE OR REPLACE TABLE `{project_id}.{dataset_table}` AS (
