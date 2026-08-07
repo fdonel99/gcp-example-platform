@@ -13,7 +13,7 @@ resource "google_bigquery_dataset" "dataset_principale" {
   delete_contents_on_destroy = var.environment == "test" ? true : false 
 }
 
-resource "google_bigquery_dataset" "dataset_principale" {
+resource "google_bigquery_dataset" "dataset_dati_storico" {
   project                    = var.project_id
   dataset_id                 = "NORTHSTAR-STORICO" 
   friendly_name              = "DM Northstar - ${title(var.environment)}"
