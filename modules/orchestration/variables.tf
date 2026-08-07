@@ -63,3 +63,8 @@ variable "function_report_fornitori_uri" {
   type        = string
   description = "L'URI della Cloud Function che esporta il report fornitori su Drive"
 }
+
+variable "function_report_giacenze_uri" {
+  type        = string
+  description = "L'URI della Cloud Function che esporta il report giacenze su Drive"
+}

@@ -83,3 +83,25 @@ resource "google_cloud_scheduler_job" "schedulazione_report_fornitori" {
     }
   }
 }
+
+# REPORT GIACENZE
+resource "google_cloud_scheduler_job" "schedulazione_report_giacenze" {
+  project          = var.project_id
+  name             = "report-giacenze-scheduler-${var.environment}"
+  description      = "Schedulazione per esportare il report giacenze su Google Sheets ogni domenica (${var.environment})"
+  
+  # 17:30 (In parallelo al report fornitori)
+  schedule         = "30 17 * * 0"
+  time_zone        = "Europe/Rome"
+  region           = var.region
+
+  http_target {
+    http_method = "POST"
+    uri         = var.function_report_giacenze_uri
+    
+    oidc_token {
+      service_account_email = var.cf_scheduler_sa_email
+      audience              = var.function_report_giacenze_uri
+    }
+  }
+}

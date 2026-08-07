@@ -17,3 +17,8 @@ output "function_report_fornitori_uri" {
   description = "L'URI della Cloud Function Report Fornitori"
   value       = google_cloudfunctions2_function.function_report_fornitori.service_config[0].uri
 }
+
+output "function_report_giacenze_uri" {
+  description = "L'URI della Cloud Function Report Giacenze"
+  value       = google_cloudfunctions2_function.function_report_giacenze.service_config[0].uri
+}

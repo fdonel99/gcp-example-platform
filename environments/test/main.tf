@@ -70,6 +70,7 @@ module "orchestration" {
   function_drive_to_gcp_uri       = module.compute_functions.function_drive_to_gcp_uri
   function_report_fornitori_uri   = module.compute_functions.function_report_fornitori_uri
   function_tables_loading_uri     = module.compute_functions.function_tables_loading_uri
+  function_report_giacenze_uri    = module.compute_functions.function_report_giacenze_uri
   function_anagrafica_prodotto_uri = module.compute_functions.function_anagrafica_prodotto_uri
   cf_scheduler_sa_email           = module.setup.cf_scheduler_sa_email
   bq_scheduler_sa_email           = module.setup.bq_scheduler_sa_email
