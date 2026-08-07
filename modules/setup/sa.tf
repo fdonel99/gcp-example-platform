@@ -15,7 +15,8 @@ locals {
     "roles/storage.objectAdmin",
     "roles/run.invoker",
     "roles/eventarc.eventReceiver",
-    "roles/aiplatform.user"
+    "roles/aiplatform.user",
+    "roles/secretmanager.secretAccessor"
   ]
 }
 
