@@ -35,20 +35,6 @@ resource "google_storage_bucket" "import_ns_zip" {
   }
 }
 
-resource "google_storage_bucket" "report_fornitori" {
-  project                     = var.project_id
-  name                        = var.environment == "prod" ? "bkt-report-fornitori" : "bkt-report-fornitori-${var.project_id}"
-  location                    = "EU"
-  storage_class               = "STANDARD"
-  uniform_bucket_level_access = true
-  public_access_prevention    = "enforced"
-  force_destroy               = local.is_test
-
-  labels = {
-    scopo = "bkt-report-fornitori"
-  }
-}
-
 resource "google_storage_bucket" "spese_trasporto" {
   project                     = var.project_id
   name                        = var.environment == "prod" ? "bkt-spese-trasporto" : "bkt-spese-trasporto-${var.project_id}"

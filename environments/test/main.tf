@@ -68,11 +68,9 @@ module "orchestration" {
   
   # URI generati dal modulo Compute Functions
   function_drive_to_gcp_uri       = module.compute_functions.function_drive_to_gcp_uri
+  function_report_fornitori_uri   = module.compute_functions.function_report_fornitori_uri
   function_tables_loading_uri     = module.compute_functions.function_tables_loading_uri
   function_anagrafica_prodotto_uri = module.compute_functions.function_anagrafica_prodotto_uri
   cf_scheduler_sa_email           = module.setup.cf_scheduler_sa_email
   bq_scheduler_sa_email           = module.setup.bq_scheduler_sa_email
-
-  # --- RIGHE CHE MANCAVANO DA REINSERIRE ---
-  bucket_report_fornitori_name     = module.data_storage.bucket_report_fornitori_name
 }

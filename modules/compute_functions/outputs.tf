@@ -12,3 +12,8 @@ output "function_anagrafica_prodotto_uri" {
   description = "L'URI della Cloud Function Anagrafica Prodotto"
   value       = google_cloudfunctions2_function.function_anagrafica_prodotto.service_config[0].uri
 }
+
+output "function_report_fornitori_uri" {
+  description = "L'URI della Cloud Function Report Fornitori"
+  value       = google_cloudfunctions2_function.function_report_fornitori.service_config[0].uri
+}

@@ -27,7 +27,7 @@ def anagrafica_prodotto(request):
     
     # Nome del foglio per l'esecuzione odierna
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
-    sheet_name = f'anagrafica_{today_str}'
+    sheet_name = f'ANAGRAFICA_{today_str}'
 
     # === LA TUA QUERY SQL COMPLETA INVARIATA ===
     sql_create_table = f"""
@@ -172,6 +172,18 @@ def anagrafica_prodotto(request):
 
         # FASE 5: Pulizia dei fogli vecchi (massimo 10 fogli)
         print("5. Controllo storico fogli (Max 10 consentiti)...")
+
+        fogli_predefiniti = ["Foglio1", "Sheet1"]
+        for nome_predefinito in fogli_predefiniti:
+            try:
+                foglio_vuoto = sh.worksheet(nome_predefinito)
+                # Verifica che non sia l'unico foglio rimasto prima di eliminarlo
+                if len(sh.worksheets()) > 1:
+                    sh.del_worksheet(foglio_vuoto)
+                    print(f"Foglio di default '{nome_predefinito}' eliminato con successo.")
+            except gspread.exceptions.WorksheetNotFound:
+                pass
+
         tutti_i_fogli = sh.worksheets()
         
         # Se abbiamo più di 10 fogli

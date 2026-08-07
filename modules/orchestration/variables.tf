@@ -26,12 +26,6 @@ variable "cf_scheduler_sa_email" {
   description = "email del Service Account dedicato allo scheduler di BigQuery"
 }
 
-
-variable "bucket_report_fornitori_name" {
-  type        = string
-  description = "Nome del bucket dove salvare i report (generato nel modulo storage)"
-}
-
 #CLOUD FUNCTIONS
 variable "function_drive_to_gcp_uri" {
   type        = string
@@ -63,4 +57,9 @@ variable "drive_folder_id" {
 variable "function_anagrafica_prodotto_uri" {
   type        = string
   description = "L'URI della Cloud Function che esporta l'anagrafica prodotto su Drive"
+}
+
+variable "function_report_fornitori_uri" {
+  type        = string
+  description = "L'URI della Cloud Function che esporta il report fornitori su Drive"
 }
