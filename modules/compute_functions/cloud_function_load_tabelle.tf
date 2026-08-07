@@ -29,7 +29,7 @@ resource "google_cloudfunctions2_function" "function_tables_loading" {
     source {
       storage_source {
         bucket = var.bucket_codice_funzioni_name
-        object = google_storage_bucket_object.upload_zip_tables_loading.name # Ora lo trova!
+        object = google_storage_bucket_object.upload_zip_tables_loading.name 
       }
     }
   }
@@ -70,8 +70,11 @@ resource "google_cloudfunctions2_function" "function_tables_loading" {
 
 # 4. Montaggio del volume GCS Fuse per leggere lo ZIP grande
 resource "null_resource" "mount_gcs_fuse_volume" {
+  # Adesso lo script scatta se cambia la funzione, se cambia il nome del bucket o se cambia il codice ZIP!
   triggers = {
     function_id = google_cloudfunctions2_function.function_tables_loading.id
+    bucket_name = var.bucket_import_ns_zip_name
+    codice_hash = data.archive_file.zip_tables_loading.output_md5
   }
 
   provisioner "local-exec" {
