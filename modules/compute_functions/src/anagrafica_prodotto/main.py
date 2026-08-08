@@ -49,7 +49,7 @@ def anagrafica_prodotto(request):
         -- 2. Creazione della tabella
         CREATE OR REPLACE TABLE `{project_id}.{dataset_table}` AS (
             WITH additional_attributes AS (
-                SELECT RTRIM(sku) AS sku,
+                SELECT trim(sku) AS sku,
                 MAX(CASE WHEN LOWER(additional_attributes) LIKE 'fornitore=%' THEN SUBSTR(additional_attributes, 11) END) AS fornitore,
                 MAX(CASE WHEN LOWER(additional_attributes) LIKE 'ean=%' THEN SUBSTR(additional_attributes, 5) END) AS ean,
                 MAX(CASE WHEN LOWER(additional_attributes) LIKE 'pdf=%' THEN SUBSTR(additional_attributes, 5) END) AS pdf,
@@ -84,24 +84,24 @@ def anagrafica_prodotto(request):
                 MAX(CASE WHEN LOWER(additional_attributes) LIKE 'privalia_mktplace=%' THEN SUBSTR(additional_attributes, 19) END) AS privalia_mktplace,
                 MAX(CASE WHEN LOWER(additional_attributes) LIKE 'privalia_mktplace_raccomanded=%' THEN SUBSTR(additional_attributes, 31) END) AS privalia_mktplace_raccomanded
                 FROM `{project_id}.NORTHSTAR.dbo_m2_additional_attributes`
-                GROUP BY RTRIM(sku)),
+                GROUP BY trim(sku)),
 
             gallery AS (
                 SELECT sku,
                 image_array[SAFE_OFFSET(0)] AS gallery_0, image_array[SAFE_OFFSET(1)] AS gallery_1, image_array[SAFE_OFFSET(2)] AS gallery_2, image_array[SAFE_OFFSET(3)] AS gallery_3, image_array[SAFE_OFFSET(4)] AS gallery_4, image_array[SAFE_OFFSET(5)] AS gallery_5, image_array[SAFE_OFFSET(6)] AS gallery_6, image_array[SAFE_OFFSET(7)] AS gallery_7, image_array[SAFE_OFFSET(8)] AS gallery_8, image_array[SAFE_OFFSET(9)] AS gallery_9
                 FROM (
-                    SELECT RTRIM(sku) AS sku, SPLIT(REPLACE(additional_images, '[path]', ''), ',') AS image_array
+                    SELECT trim(sku) AS sku, SPLIT(REPLACE(additional_images, '[path]', ''), ',') AS image_array
                     FROM `{project_id}.NORTHSTAR.dbo_m2_articoli`
                 )
             ),
 
             base_data AS (
-                SELECT COALESCE(a.sku, RTRIM(b.sku)) AS sku, a.* EXCEPT(sku),
+                SELECT COALESCE(a.sku, trim(b.sku)) AS sku, a.* EXCEPT(sku),
                 b.name, b.product_type, b.categories, b.color, b.size, b.price, b.special_price, b.qty, b.description, b.short_description, b.parent,
                 LTRIM(REPLACE(b.thumbnail_image, '[path]', ''), '/') AS thumbnail_image, LTRIM(REPLACE(b.base_image, '[path]', ''), '/') AS base_image, LTRIM(REPLACE(b.small_image, '[path]', ''), '/') AS small_image,
                 LTRIM(ga.gallery_0, '/') AS gallery_0, LTRIM(ga.gallery_1, '/') AS gallery_1, LTRIM(ga.gallery_2, '/') AS gallery_2, LTRIM(ga.gallery_3, '/') AS gallery_3, LTRIM(ga.gallery_4, '/') AS gallery_4, LTRIM(ga.gallery_5, '/') AS gallery_5, LTRIM(ga.gallery_6, '/') AS gallery_6, LTRIM(ga.gallery_7, '/') AS gallery_7, LTRIM(ga.gallery_8, '/') AS gallery_8, LTRIM(ga.gallery_9, '/') AS gallery_9
                 FROM additional_attributes a 
-                FULL OUTER JOIN `{project_id}.NORTHSTAR.dbo_m2_articoli` b ON a.sku = RTRIM(b.sku)
+                FULL OUTER JOIN `{project_id}.NORTHSTAR.dbo_m2_articoli` b ON a.sku = trim(b.sku)
                 FULL OUTER JOIN gallery ga ON a.sku = ga.sku
             )
 

@@ -25,9 +25,7 @@ def report_fornitori(request):
         sheet_id = '1o0nppIt-GPVMyXg48XmTBC8wU3sapJFdZH7Wpj4fZ84'
         print(f"Ambiente di PROD rilevato. Uso Sheet ID: {sheet_id}")
         sheet_name = f'REPORT_FORNITORI_{today_str}'
-    
-    # 1. Creazione tabella su BigQuery: Mantiene il dettaglio per SINGOLA DATA
-    # (Modificato RTRIM in TRIM per maggiore sicurezza sulle JOIN)
+
     sql_create_table = f"""
         CREATE OR REPLACE TABLE `{project_id}.{dataset_table}` AS ( 
           SELECT 
