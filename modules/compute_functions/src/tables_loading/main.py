@@ -172,11 +172,11 @@ def run_sqlite_to_bigquery(request):
                     
                     ws_mov = sh.worksheet('MOVIMENTO')
                     df_mov = pl.DataFrame(ws_mov.get_all_records())
-                    df_mov = df_mov.select(["MOVIMENTO", "DESCRIZIONE MOVIMENTO", "CLASSIFICAZIONE"]).unique(subset=["MOVIMENTO"])
+                    df_mov = df_mov.select(["MOVIMENTO", "DESCRIZIONE_MOVIMENTO", "CLASSIFICAZIONE"]).unique(subset=["MOVIMENTO"])
                     
                     ws_tipo = sh.worksheet('TIPO')
                     df_tipo = pl.DataFrame(ws_tipo.get_all_records())
-                    df_tipo = df_tipo.select(["TIPO", "DESCRIZIONE TIPO"]).unique(subset=["TIPO"])
+                    df_tipo = df_tipo.select(["TIPO", "DESCRIZIONE_TIPO"]).unique(subset=["TIPO"])
                     
                     df = df.with_columns([
                         pl.col("MOVIMENTO").cast(pl.Utf8),

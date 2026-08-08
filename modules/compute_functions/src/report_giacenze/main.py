@@ -17,7 +17,6 @@ def report_giacenze(request):
     dataset_table = 'NORTHSTAR.REPORT_GIACENZE'
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
     
-
     if 'test' in project_id.lower():
         sheet_id = '1Ay1tjHrreEsM-Z1TBhnrg760czJSL9fOXt_VKtZDBeY' 
         sheet_name = f'REPORT_GIACENZE_TEST_{today_str}'
@@ -27,7 +26,7 @@ def report_giacenze(request):
         print(f"Ambiente di PROD rilevato. Uso Sheet ID: {sheet_id}")
         sheet_name = f'REPORT_FORNITORI_{today_str}'
     
-
+    # 1. Questa query rimane invariata: salva su BigQuery il dettaglio per SINGOLA DATA
     sql_create_table = f"""
         CREATE OR REPLACE TABLE `{project_id}.{dataset_table}` AS (
             SELECT 
@@ -35,14 +34,16 @@ def report_giacenze(request):
                 a.fornitore, 
                 d.magazzino,
                 d.DATA_MOVIMENTO,
+                SUBSTR(d.DATA_MOVIMENTO, 1, 4) AS anno_movimento,
+                SUBSTR(d.DATA_MOVIMENTO, 5, 2) AS mese_movimento,
                 d.CLASSIFICAZIONE, 
                 SUM(d.QTA) as tot_qta
             FROM (
-                SELECT * REPLACE(LTRIM(sku) AS sku)
+                SELECT * REPLACE(TRIM(sku) AS sku)
                 FROM `{project_id}.NORTHSTAR.dbo_movimenti`
             ) d 
             LEFT JOIN (
-                SELECT * REPLACE(LTRIM(sku) AS sku)
+                SELECT * REPLACE(TRIM(sku) AS sku)
                 FROM `{project_id}.NORTHSTAR.ANAGRAFICA_PRODOTTO`
             ) a USING(sku)
             GROUP BY ALL
@@ -55,8 +56,22 @@ def report_giacenze(request):
         bq_client.query(sql_create_table).result()
         print("Tabella creata con successo.")
 
-        print("2. Scaricamento dati nel dataframe...")
-        query_select = f"SELECT * FROM `{project_id}.{dataset_table}`"
+        print("2. Scaricamento dati aggregati nel dataframe...")
+
+        query_select = f"""
+            SELECT 
+                sku,
+                fornitore, 
+                magazzino,
+                anno_movimento,
+                mese_movimento,
+                CLASSIFICAZIONE, 
+                SUM(tot_qta) AS tot_qta
+            FROM `{project_id}.{dataset_table}`
+            GROUP BY ALL
+        """
+        # ⬆️ FINE MODIFICA ⬆️
+        
         df = bq_client.query(query_select).to_dataframe()
 
         print(f"DEBUG: DataFrame shape: {df.shape}")

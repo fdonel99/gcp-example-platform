@@ -26,6 +26,8 @@ def report_fornitori(request):
         print(f"Ambiente di PROD rilevato. Uso Sheet ID: {sheet_id}")
         sheet_name = f'REPORT_FORNITORI_{today_str}'
     
+    # 1. Creazione tabella su BigQuery: Mantiene il dettaglio per SINGOLA DATA
+    # (Modificato RTRIM in TRIM per maggiore sicurezza sulle JOIN)
     sql_create_table = f"""
         CREATE OR REPLACE TABLE `{project_id}.{dataset_table}` AS ( 
           SELECT 
@@ -36,11 +38,13 @@ def report_fornitori(request):
             nazione_des,
             pagamento_def,
             TRIM(MAX(name), '"') AS nome,
-            SAFE.PARSE_DATE('%Y%m%d', SUBSTR(MAX(DATAISO), 1, 8)) AS data_spedizione,
+            SAFE.PARSE_DATE('%Y%m%d', SUBSTR(DATAISO, 1, 8)) AS data_spedizione,
+            SUBSTR(DATAISO, 1, 4) AS anno_spedizione,
+            SUBSTR(DATAISO, 5, 2) AS mese_spedizione,
             SUM(SAFE_CAST(REPLACE(prezzo_totale, ',', '.') AS FLOAT64)) AS prezzo_totale,
-            sum(qta_spedita) as tot_qta_spedita,
-            AVG(SAFE_CAST(REPLACE(PREZZO_UNITARIO, ',', '.') AS FLOAT64)) AS prezzo_unitario,
-            SUM(CASE WHEN CAST(REPLACE(PREZZO_UNITARIO , "," , ".") AS FLOAT64) = 0 THEN qta_spedita ELSE 0 END) AS qta_gratuita
+            SUM(qta_spedita) AS tot_qta_spedita,
+            SAFE_DIVIDE(SUM(SAFE_CAST(REPLACE(prezzo_totale, ',', '.') AS FLOAT64)), SUM(qta_spedita)) AS prezzo_unitario,
+            SUM(CASE WHEN SAFE_CAST(REPLACE(PREZZO_UNITARIO , "," , ".") AS FLOAT64) = 0 THEN qta_spedita ELSE 0 END) AS qta_gratuita
           FROM (
             SELECT 
               o.sku, 
@@ -56,11 +60,11 @@ def report_fornitori(request):
               p.iva AS iva,
               t.NAZIONE_DES
             FROM (
-              SELECT * REPLACE(RTRIM(sku) AS sku) 
+              SELECT * REPLACE(TRIM(sku) AS sku) 
               FROM `{project_id}.NORTHSTAR.dbo_ordini_righe`
             ) o 
             LEFT JOIN (
-              SELECT * REPLACE(RTRIM(sku) AS sku) 
+              SELECT * REPLACE(TRIM(sku) AS sku) 
               FROM `{project_id}.NORTHSTAR.ANAGRAFICA_PRODOTTO`
             ) p USING(sku)
             LEFT JOIN `{project_id}.NORTHSTAR.dbo_ordini_testate_pag` t USING(ORDINE)
@@ -76,8 +80,27 @@ def report_fornitori(request):
         bq_client.query(sql_create_table).result()
         print("Tabella creata con successo.")
 
-        print("2. Scaricamento dati nel dataframe...")
-        query_select = f"SELECT * FROM `{project_id}.{dataset_table}`"
+        print("2. Scaricamento dati aggregati nel dataframe...")
+
+        query_select = f"""
+            SELECT 
+                sku, 
+                fornitore, 
+                costo, 
+                iva, 
+                nazione_des, 
+                pagamento_def, 
+                nome, 
+                anno_spedizione, 
+                mese_spedizione,
+                SUM(prezzo_totale) AS prezzo_totale,
+                SUM(tot_qta_spedita) AS tot_qta_spedita,
+                SAFE_DIVIDE(SUM(prezzo_totale), SUM(tot_qta_spedita)) AS prezzo_unitario,
+                SUM(qta_gratuita) AS qta_gratuita
+            FROM `{project_id}.{dataset_table}`
+            GROUP BY ALL
+        """
+        
         df = bq_client.query(query_select).to_dataframe()
 
         print(f"DEBUG: DataFrame shape: {df.shape}")
