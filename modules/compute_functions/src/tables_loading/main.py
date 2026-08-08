@@ -29,17 +29,17 @@ MOUNT_PATH = '/mnt/bucket'
 
 
 def load_chiavi():
-    """Legge il file chiavi.json posizionato nella stessa cartella della funzione."""
-    json_path = os.path.join(os.path.dirname(__file__), 'chiavi.json')
+    """Legge il file primary_keys.json posizionato nella stessa cartella della funzione."""
+    json_path = os.path.join(os.path.dirname(__file__), 'primary_keys.json')
     try:
         if os.path.exists(json_path):
             with open(json_path, 'r') as f:
                 return json.load(f)
         else:
-            print(f"⚠️ File chiavi.json non trovato in {json_path}. Verrà eseguito TRUNCATE per tutte le tabelle come fallback.")
+            print(f"⚠️ File primary_keys.json non trovato in {json_path}. Verrà eseguito TRUNCATE per tutte le tabelle come fallback.")
             return {}
     except Exception as e:
-        print(f"⚠️ Errore lettura chiavi.json: {e}")
+        print(f"⚠️ Errore lettura primary_keys.json: {e}")
         return {}
 
 CHIAVI_PRIMARIE = load_chiavi()
