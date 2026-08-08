@@ -2,8 +2,6 @@ import sys
 import pysqlite3
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import sqlite3
-
-# Import standard
 import os
 import glob
 import zipfile
@@ -11,10 +9,9 @@ import urllib.request
 import urllib.parse
 import gc
 import shutil
+import json
 from datetime import datetime, timedelta, timezone
 import functions_framework
-
-# Import Cloud e Dati
 from google.cloud import bigquery
 import polars as pl
 import google.auth
@@ -23,14 +20,30 @@ import gspread
 # --- CONFIGURAZIONE TELEGRAM E AMBIENTE ---
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
-
 PROJECT_ID = os.environ.get('GOOGLE_CLOUD_PROJECT', '')
-
 DATASET_ID = os.environ.get('DATASET_ID')
+STAGING_DATASET_ID = os.environ.get('STAGING_DATASET_ID', 'NORTHSTAR_STAGING')
 BUCKET_NAME = os.environ.get('BUCKET_NAME')
 SHEET_ID = os.environ.get('SHEET_ID', '1ptH6m4mS6UozgrtRUfoP_wMMwbx7wTiIn1T6eJ0Vy1c') 
-
 MOUNT_PATH = '/mnt/bucket'    
+
+
+def load_chiavi():
+    """Legge il file chiavi.json posizionato nella stessa cartella della funzione."""
+    json_path = os.path.join(os.path.dirname(__file__), 'chiavi.json')
+    try:
+        if os.path.exists(json_path):
+            with open(json_path, 'r') as f:
+                return json.load(f)
+        else:
+            print(f"⚠️ File chiavi.json non trovato in {json_path}. Verrà eseguito TRUNCATE per tutte le tabelle come fallback.")
+            return {}
+    except Exception as e:
+        print(f"⚠️ Errore lettura chiavi.json: {e}")
+        return {}
+
+CHIAVI_PRIMARIE = load_chiavi()
+
 
 def invia_notifica_telegram(messaggio):
     """Invia un messaggio di testo tramite il bot Telegram con prefisso ambiente."""
@@ -66,8 +79,8 @@ def invia_notifica_telegram(messaggio):
 def run_sqlite_to_bigquery(request):
     """
     Attivata via HTTP da Cloud Scheduler (Cron). 
-    Cerca l'ultimo ZIP (se inserito negli ultimi 7 giorni), estrae e seleziona 
-    SOLO il file SQLite corrispondente, lo elabora in parallelo su BigQuery e pulisce la RAM.
+    Estrae il file SQLite, lo elabora caricando i dati nella tabella di STAGING 
+    e fa il MERGE incrementale su quella in PRODUZIONE.
     """
     if not DATASET_ID or not BUCKET_NAME:
         errore_msg = "Parametri DATASET_ID o BUCKET_NAME mancanti nelle variabili d'ambiente."
@@ -144,7 +157,9 @@ def run_sqlite_to_bigquery(request):
         for t_name in tables:
             try:
                 clean_table_name = t_name.replace(' ', '_').replace('-', '_')
-                table_id = f"{PROJECT_ID}.{DATASET_ID}.{clean_table_name}"
+                
+                target_table_id = f"{PROJECT_ID}.{DATASET_ID}.{clean_table_name}"
+                staging_table_id = f"{PROJECT_ID}.{STAGING_DATASET_ID}.{clean_table_name}_staging"
                 
                 parquet_filename = f"{clean_table_name}_temp.parquet"
                 parquet_path = os.path.join(MOUNT_PATH, parquet_filename)
@@ -161,7 +176,6 @@ def run_sqlite_to_bigquery(request):
                     if "SKU" in df.columns:
                         df = df.with_columns(pl.col("SKU").str.replace_all(" ", "", literal=True))
                     
-                    print("Connessione a Google Sheets per Left Join...")
                     credentials, _ = google.auth.default(scopes=[
                         'https://www.googleapis.com/auth/spreadsheets.readonly',
                         'https://www.googleapis.com/auth/drive.readonly'
@@ -192,18 +206,28 @@ def run_sqlite_to_bigquery(request):
 
                 df.write_parquet(parquet_path)
                 
+                colonne_df = df.columns
+                chiave_univoca = CHIAVI_PRIMARIE.get(t_name)
+                
                 del df 
                 gc.collect()
                 
-                print(f"Avvio job asincrono su BigQuery per {t_name}...")
+                print(f"Avvio job asincrono in STAGING su BigQuery per {t_name}...")
                 job_config = bigquery.LoadJobConfig(
                     source_format=bigquery.SourceFormat.PARQUET,
-                    write_disposition="WRITE_TRUNCATE",
+                    write_disposition="WRITE_TRUNCATE", 
                 )
                 
-                job = bq_client.load_table_from_uri(gcs_uri, table_id, job_config=job_config)
+                job_staging = bq_client.load_table_from_uri(gcs_uri, staging_table_id, job_config=job_config)
                 
-                bq_jobs.append((t_name, job))
+                bq_jobs.append({
+                    "t_name": t_name,
+                    "job": job_staging,
+                    "target_id": target_table_id,
+                    "staging_id": staging_table_id,
+                    "chiave": chiave_univoca,
+                    "colonne": colonne_df
+                })
                 parquets_da_eliminare.append(parquet_path)
                     
             except Exception as table_error:
@@ -212,13 +236,73 @@ def run_sqlite_to_bigquery(request):
                     del df
                     gc.collect()
 
-        print("Tutti i dati estratti. Attesa che BigQuery completi i caricamenti in parallelo...")
-        for t_name, job in bq_jobs:
+        print("Tutti i dati estratti. Attesa che BigQuery completi gli STAGING per fare il MERGE...")
+        merge_jobs = []
+        
+        for info in bq_jobs:
+            t_name = info["t_name"]
             try:
-                job.result()
-                print(f"✅ Tabella confermata: {t_name}")
+                info["job"].result() 
+                print(f"✅ Staging confermato per {t_name}. Avvio logica Delta nel target...")
+                
+                query_creazione = f"CREATE TABLE IF NOT EXISTS `{info['target_id']}` AS SELECT * FROM `{info['staging_id']}` LIMIT 0;"
+                bq_client.query(query_creazione).result()
+                
+                chiave_config = info["chiave"]
+                
+                if not chiave_config:
+                    print(f"⚠️ Nessuna chiave definita nel JSON per {t_name}. Eseguo sostituzione totale.")
+                    query = f"CREATE OR REPLACE TABLE `{info['target_id']}` AS SELECT * FROM `{info['staging_id']}`"
+                else:
+                    if isinstance(chiave_config, str):
+                        chiavi = [chiave_config]
+                    else:
+                        chiavi = chiave_config
+                        
+                    chiavi = [k for k in chiavi if k in info["colonne"]]
+                    
+                    if not chiavi:
+                        print(f"⚠️ Le chiavi definite per {t_name} non esistono nelle colonne scaricate. Eseguo sostituzione totale.")
+                        query = f"CREATE OR REPLACE TABLE `{info['target_id']}` AS SELECT * FROM `{info['staging_id']}`"
+                    else:
+                        on_condition = " AND ".join([f"T.`{k}` = S.`{k}`" for k in chiavi])
+                        
+                        campi_update = ", ".join([f"T.`{col}` = S.`{col}`" for col in info["colonne"] if col not in chiavi])
+
+                        campi_insert = ", ".join([f"`{col}`" for col in info["colonne"]])
+                        valori_insert = ", ".join([f"S.`{col}`" for col in info["colonne"]])
+                        
+                        query = f"""
+                        MERGE `{info['target_id']}` T
+                        USING `{info['staging_id']}` S
+                        ON {on_condition}
+                        """
+
+                        if campi_update:
+                            query += f"""
+                            WHEN MATCHED THEN
+                                UPDATE SET {campi_update}
+                            """
+                            
+                        query += f"""
+                        WHEN NOT MATCHED THEN
+                            INSERT ({campi_insert})
+                            VALUES ({valori_insert})
+                        """
+
+                merge_job = bq_client.query(query)
+                merge_jobs.append((t_name, merge_job))
+                
             except Exception as e:
-                print(f"❌ Errore segnalato da BigQuery per {t_name}: {e}")
+                print(f"❌ Errore staging/preparazione MERGE per {t_name}: {e}")
+
+        print("Attesa completamento caricamenti Delta (MERGE) in BigQuery...")
+        for t_name, m_job in merge_jobs:
+            try:
+                m_job.result()
+                print(f"✅ Tabella aggiornata e unita con successo: {t_name}")
+            except Exception as e:
+                print(f"❌ Errore segnalato da BigQuery per {t_name} durante il MERGE: {e}")
 
         print("Rimozione dei file Parquet temporanei dal bucket...")
         for p_path in parquets_da_eliminare:
@@ -234,7 +318,7 @@ def run_sqlite_to_bigquery(request):
         print("Marker di elaborazione aggiornato. File originale lasciato intatto.")
 
         print("Processo completato con successo.")
-        invia_notifica_telegram(f"✅ *Sincronizzazione Completata!*\nTutti i dati di `{file_name}` sono stati caricati su BigQuery.")
+        invia_notifica_telegram(f"✅ *Sincronizzazione Completata!*\nTutti i dati di `{file_name}` sono stati caricati in Delta Load su BigQuery.")
         
         return "Elaborazione completata con successo", 200
         

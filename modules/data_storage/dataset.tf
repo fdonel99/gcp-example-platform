@@ -25,3 +25,16 @@ resource "google_bigquery_dataset" "dataset_dati_storico" {
   }
   delete_contents_on_destroy = var.environment == "test" ? true : false 
 }
+
+resource "google_bigquery_dataset" "dataset_dati_storico" {
+  project                    = var.project_id
+  dataset_id                 = "NORTHSTAR_STAGING" 
+  friendly_name              = "DM Northstar Staging - ${title(var.environment)}"
+  description                = "Dataset con lo staging di dati da caricare (${var.environment})"
+  location                   = "EU"
+  
+  labels = {
+    scopo = "dm-northstar-storage-fisico"
+  }
+  delete_contents_on_destroy = var.environment == "test" ? true : false 
+}

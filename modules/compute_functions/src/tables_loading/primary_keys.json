@@ -1,0 +1,11 @@
+{
+    "dbo_clienti_destinazioni_ordini" : "CHIAVE",
+    "dbo_clienti_ordini" : "CHIAVE",
+    "dbo_giacenze" : "ID",
+    "dbo_giacenze_extra" : "ID",
+    "dbo_m2_additional_attributes" : "id",
+    "dbo_m2_articoli" : "id",
+    "dbo_movimenti" : ["SKU", "MAGAZZINO", "DATA_MOVIMENTO","DOCUMENTO","NOMEFILE","ID"],
+    "dbo_ordini" : ["ORDINE" , "NUMERO_RIGA"],
+    "dbo_ordini_testate_pag" : "ORDINR"
+}
