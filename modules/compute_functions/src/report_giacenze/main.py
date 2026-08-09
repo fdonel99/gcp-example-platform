@@ -66,8 +66,8 @@ def report_giacenze(request):
             FROM `{project_id}.{dataset_table}`
             GROUP BY ALL
             ORDER BY 
-                anno_spedizione DESC, 
-                mese_spedizione DESC, 
+                anno_movimento DESC, 
+                mese_movimento DESC, 
                 fornitore DESC
         """
         
