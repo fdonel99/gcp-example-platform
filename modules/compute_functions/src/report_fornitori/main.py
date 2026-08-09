@@ -35,7 +35,7 @@ def report_fornitori(request):
             iva, 
             nazione_des,
             pagamento_def,
-            TRIM(MAX(name), '"') AS nome,
+            TRIM(name, '"') AS nome,
             SAFE.PARSE_DATE('%Y%m%d', SUBSTR(DATAISO, 1, 8)) AS data_spedizione,
             SUBSTR(DATAISO, 1, 4) AS anno_spedizione,
             SUBSTR(DATAISO, 5, 2) AS mese_spedizione,
@@ -57,14 +57,8 @@ def report_fornitori(request):
               o.PREZZO_TOTALE,
               p.iva AS iva,
               t.NAZIONE_DES
-            FROM (
-              SELECT * REPLACE(TRIM(sku) AS sku) 
-              FROM `{project_id}.NORTHSTAR.dbo_ordini_righe`
-            ) o 
-            LEFT JOIN (
-              SELECT * REPLACE(TRIM(sku) AS sku) 
-              FROM `{project_id}.NORTHSTAR.ANAGRAFICA_PRODOTTO`
-            ) p USING(sku)
+            FROM `{project_id}.NORTHSTAR.dbo_ordini_righe` o 
+            LEFT JOIN `{project_id}.NORTHSTAR.ANAGRAFICA_PRODOTTO` p USING(sku)
             LEFT JOIN `{project_id}.NORTHSTAR.dbo_ordini_testate_pag` t USING(ORDINE)
             WHERE o.DATA_SPEDIZIONE != "000000"
           )

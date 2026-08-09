@@ -38,14 +38,9 @@ def report_giacenze(request):
                 SUBSTR(d.DATA_MOVIMENTO, 5, 2) AS mese_movimento,
                 d.CLASSIFICAZIONE, 
                 SUM(d.QTA) as tot_qta
-            FROM (
-                SELECT * REPLACE(TRIM(sku) AS sku)
-                FROM `{project_id}.NORTHSTAR.dbo_movimenti`
-            ) d 
-            LEFT JOIN (
-                SELECT * REPLACE(TRIM(sku) AS sku)
-                FROM `{project_id}.NORTHSTAR.ANAGRAFICA_PRODOTTO`
-            ) a USING(sku)
+
+            FROM  `{project_id}.NORTHSTAR.dbo_movimenti`
+            LEFT JOIN `{project_id}.NORTHSTAR.ANAGRAFICA_PRODOTTO` a USING(sku)
             GROUP BY ALL
         );
     """

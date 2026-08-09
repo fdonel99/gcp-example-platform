@@ -1,0 +1,32 @@
+Query 1
+
+MERGE `cloud-platform-northstar-test.NORTHSTAR.dbo_movimenti` AS Prod
+USING `cloud-platform-northstar-test.NORTHSTAR_STORICO.dbo_movimenti` AS Storico
+ON 
+  Prod.SKU = Storico.SKU AND 
+  Prod.MAGAZZINO = Storico.MAGAZZINO AND 
+  Prod.DATA_MOVIMENTO = Storico.DATA_MOVIMENTO AND
+  Prod.DOCUMENTO = Storico.DOCUMENTO AND
+  Prod.NOMEFILE = Storico.NOMEFILE AND
+  Prod.ID = Storico.ID
+WHEN NOT MATCHED THEN
+  INSERT ROW;
+
+Query 2
+
+MERGE `cloud-platform-northstar-test.NORTHSTAR.dbo_ordini_righe` AS Prod
+USING `cloud-platform-northstar-test.NORTHSTAR_STORICO.dbo_ordini_righe` AS Storico
+ON 
+  Prod.ORDINE = Storico.ORDINE AND 
+  Prod.NUMERO_RIGA = Storico.NUMERO_RIGA
+WHEN NOT MATCHED THEN
+  INSERT ROW;
+
+Query 3
+
+MERGE `cloud-platform-northstar-test.NORTHSTAR.dbo_ordini_testate_pag` AS Prod
+USING `cloud-platform-northstar-test.NORTHSTAR_STORICO.dbo_ordini_testate_pag` AS Storico
+ON 
+  Prod.ORDINE = Storico.ORDINE
+WHEN NOT MATCHED THEN
+  INSERT ROW;
