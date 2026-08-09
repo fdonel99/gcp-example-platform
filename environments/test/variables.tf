@@ -31,3 +31,9 @@ variable "drive_folder_id" {
   description = "L'ID della cartella Google Drive da cui estrarre i file"
   type        = string
 }
+
+variable "folder_id_storico" {
+  type        = string
+  description = "L'ID della cartella Google Drive contenente lo storico"
+  default = "1ujC-hbN_haUjrg8b3kLVrML0ad_UwTlO"
+}

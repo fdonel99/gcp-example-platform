@@ -8,6 +8,11 @@ output "dataset_dati_storico_id" {
   value       = google_bigquery_dataset.dataset_dati_storico.dataset_id
 }
 
+output "dataset_dati_staging_id" {
+  description = "L'ID del dataset BigQuery con dati di storico"
+  value       = google_bigquery_dataset.dataset_dati_staging.dataset_id
+}
+
 output "bucket_codice_funzioni_name" {
   description = "Nome del bucket che ospita il codice delle Cloud Functions"
   value       = google_storage_bucket.bucket_codice_funzioni.name

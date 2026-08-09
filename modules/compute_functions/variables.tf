@@ -58,3 +58,8 @@ variable "telegram_chat_id_secret_name" {
   type        = string
   description = "Nome del secret per la Chat ID Telegram"
 }
+
+variable "folder_id_storico" {
+  type        = string
+  description = "L'ID della cartella Google Drive contenente il file ZIP dello storico (es. 2023-2024-2025.zip)"
+}

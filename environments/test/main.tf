@@ -39,6 +39,7 @@ module "compute_functions" {
   project_id                     = var.project_id
   region                         = var.region
   environment                    = var.environment
+  folder_id_storico              = var.folder_id_storico
   
   # Variabili passate dagli ALTRI moduli:
   cloud_worker_sa_email          = module.setup.cloud_worker_sa_email

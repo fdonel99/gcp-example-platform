@@ -44,6 +44,7 @@ module "compute_functions" {
   project_id                          = var.project_id
   region                              = var.region
   environment                         = var.environment
+  folder_id_storico                   = var.folder_id_storico
   
   cloud_worker_sa_email               = module.setup.cloud_worker_sa_email
   bucket_codice_funzioni_name         = module.data_storage.bucket_codice_funzioni_name

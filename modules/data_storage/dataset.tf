@@ -17,11 +17,11 @@ resource "google_bigquery_dataset" "dataset_dati_storico" {
   project                    = var.project_id
   dataset_id                 = "NORTHSTAR_STORICO" 
   friendly_name              = "DM Northstar Storico - ${title(var.environment)}"
-  description                = "Dataset con lo storico di dati passati (${var.environment})"
+  description                = "Dataset con lo storico dati offline 2023-2025 (${var.environment})"
   location                   = "EU"
   
   labels = {
-    scopo = "dm-northstar-storage-fisico"
+    scopo = "dm-northstar-storico"
   }
   delete_contents_on_destroy = var.environment == "test" ? true : false 
 }

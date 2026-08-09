@@ -22,3 +22,8 @@ output "function_report_giacenze_uri" {
   description = "L'URI della Cloud Function Report Giacenze"
   value       = google_cloudfunctions2_function.function_report_giacenze.service_config[0].uri
 }
+
+output "function_load_storico_uri" {
+  description = "L'URI della Cloud Function Load Storico"
+  value       = google_cloudfunctions2_function.function_load_storico.service_config[0].uri
+}
