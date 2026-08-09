@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 import functions_framework
 from google.cloud import bigquery
 import polars as pl
-import polars.selectors as cs  # Aggiunto per selezionare i campi stringa
+import polars.selectors as cs 
 import google.auth
 import gspread
 
@@ -36,7 +36,7 @@ def load_chiavi():
             with open(json_path, 'r') as f:
                 return json.load(f)
         else:
-            print(f"⚠️ File primary_keys.json non trovato in {json_path}. Verrà eseguito TRUNCATE per tutte le tabelle come fallback.")
+            print(f"⚠️ File primary_keys.json non trovato in {json_path}. Nessuna tabella potrà essere elaborata senza chiavi primarie.")
             return {}
     except Exception as e:
         print(f"⚠️ Errore lettura primary_keys.json: {e}")
@@ -168,7 +168,6 @@ def run_sqlite_to_bigquery(request):
                 
                 df = pl.read_database_uri(query=query, uri=sqlite_uri)
                 
-                # --- APPLICAZIONE TRIM GLOBALE SU TUTTI I CAMPI TESTO ---
                 df = df.with_columns(cs.string().str.strip_chars())
                 
                 if t_name == "dbo_movimenti":
@@ -193,7 +192,6 @@ def run_sqlite_to_bigquery(request):
                     df_tipo = pl.DataFrame(ws_tipo.get_all_records())
                     df_tipo = df_tipo.select(["TIPO", "DESCRIZIONE_TIPO"]).unique(subset=["TIPO"])
                     
-                    # --- APPLICAZIONE TRIM ANCHE SUI DATI PROVENIENTI DA GOOGLE SHEETS ---
                     df_mov = df_mov.with_columns(cs.string().str.strip_chars())
                     df_tipo = df_tipo.with_columns(cs.string().str.strip_chars())
                     
@@ -256,44 +254,47 @@ def run_sqlite_to_bigquery(request):
                 chiave_config = info["chiave"]
                 
                 if not chiave_config:
-                    print(f"⚠️ Nessuna chiave definita nel JSON per {t_name}. Eseguo sostituzione totale.")
-                    query = f"CREATE OR REPLACE TABLE `{info['target_id']}` AS SELECT * FROM `{info['staging_id']}`"
+                    # ERRORE 1: Nessuna chiave configurata nel JSON
+                    raise ValueError(f"Nessuna chiave definita nel JSON per la tabella {t_name}. MERGE bloccato per evitare sovrascrittura totale.")
+                
+                # Se c'è una chiave config, controllo che sia una lista
+                if isinstance(chiave_config, str):
+                    chiavi = [chiave_config]
                 else:
-                    if isinstance(chiave_config, str):
-                        chiavi = [chiave_config]
-                    else:
-                        chiavi = chiave_config
-                        
-                    chiavi = [k for k in chiavi if k in info["colonne"]]
+                    chiavi = chiave_config
                     
-                    if not chiavi:
-                        print(f"⚠️ Le chiavi definite per {t_name} non esistono nelle colonne scaricate. Eseguo sostituzione totale.")
-                        query = f"CREATE OR REPLACE TABLE `{info['target_id']}` AS SELECT * FROM `{info['staging_id']}`"
-                    else:
-                        on_condition = " AND ".join([f"T.`{k}` = S.`{k}`" for k in chiavi])
-                        
-                        campi_update = ", ".join([f"T.`{col}` = S.`{col}`" for col in info["colonne"] if col not in chiavi])
+                # Verifico che le chiavi esistano effettivamente tra le colonne scaricate
+                chiavi = [k for k in chiavi if k in info["colonne"]]
+                
+                if not chiavi:
+                    # ERRORE 2: Le chiavi configurate non corrispondono alle colonne reali
+                    raise ValueError(f"Le chiavi definite per {t_name} non esistono nelle colonne scaricate. MERGE bloccato per evitare sovrascrittura totale.")
+                
+                # --- SEZIONE MERGE (eseguita solo se le chiavi esistono) ---
+                on_condition = " AND ".join([f"T.`{k}` = S.`{k}`" for k in chiavi])
+                
+                campi_update = ", ".join([f"T.`{col}` = S.`{col}`" for col in info["colonne"] if col not in chiavi])
 
-                        campi_insert = ", ".join([f"`{col}`" for col in info["colonne"]])
-                        valori_insert = ", ".join([f"S.`{col}`" for col in info["colonne"]])
-                        
-                        query = f"""
-                        MERGE `{info['target_id']}` T
-                        USING `{info['staging_id']}` S
-                        ON {on_condition}
-                        """
+                campi_insert = ", ".join([f"`{col}`" for col in info["colonne"]])
+                valori_insert = ", ".join([f"S.`{col}`" for col in info["colonne"]])
+                
+                query = f"""
+                MERGE `{info['target_id']}` T
+                USING `{info['staging_id']}` S
+                ON {on_condition}
+                """
 
-                        if campi_update:
-                            query += f"""
-                            WHEN MATCHED THEN
-                                UPDATE SET {campi_update}
-                            """
-                            
-                        query += f"""
-                        WHEN NOT MATCHED THEN
-                            INSERT ({campi_insert})
-                            VALUES ({valori_insert})
-                        """
+                if campi_update:
+                    query += f"""
+                    WHEN MATCHED THEN
+                        UPDATE SET {campi_update}
+                    """
+                    
+                query += f"""
+                WHEN NOT MATCHED THEN
+                    INSERT ({campi_insert})
+                    VALUES ({valori_insert})
+                """
 
                 merge_job = bq_client.query(query)
                 merge_jobs.append((t_name, merge_job))
