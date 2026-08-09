@@ -39,9 +39,10 @@ def report_giacenze(request):
                 d.CLASSIFICAZIONE, 
                 SUM(d.QTA) as tot_qta
 
-            FROM  `{project_id}.NORTHSTAR.dbo_movimenti`
+            FROM  `{project_id}.NORTHSTAR.dbo_movimenti` d
             LEFT JOIN `{project_id}.NORTHSTAR.ANAGRAFICA_PRODOTTO` a USING(sku)
             GROUP BY ALL
+            ORDER BY anno_movimento desc, mese_movimento desc, fornitore desc
         );
     """
 
@@ -64,8 +65,11 @@ def report_giacenze(request):
                 SUM(tot_qta) AS tot_qta
             FROM `{project_id}.{dataset_table}`
             GROUP BY ALL
+            ORDER BY 
+                anno_spedizione DESC, 
+                mese_spedizione DESC, 
+                fornitore DESC
         """
-        # ⬆️ FINE MODIFICA ⬆️
         
         df = bq_client.query(query_select).to_dataframe()
 

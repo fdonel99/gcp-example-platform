@@ -49,6 +49,7 @@ def anagrafica_prodotto(request):
         -- 2. Creazione della tabella
         CREATE OR REPLACE TABLE `{project_id}.{dataset_table}` AS (
             WITH additional_attributes AS (
+                SELECT
                 sku,
                 MAX(CASE WHEN LOWER(additional_attributes) LIKE 'fornitore=%' THEN SUBSTR(additional_attributes, 11) END) AS fornitore,
                 MAX(CASE WHEN LOWER(additional_attributes) LIKE 'ean=%' THEN SUBSTR(additional_attributes, 5) END) AS ean,
@@ -96,7 +97,7 @@ def anagrafica_prodotto(request):
             ),
 
             base_data AS (
-                SELECT COALESCE(a.sku, b.sku)) AS sku, a.* EXCEPT(sku),
+                SELECT COALESCE(a.sku, b.sku) AS sku, a.* EXCEPT(sku),
                 b.name, b.product_type, b.categories, b.color, b.size, b.price, b.special_price, b.qty, b.description, b.short_description, b.parent,
                 LTRIM(REPLACE(b.thumbnail_image, '[path]', ''), '/') AS thumbnail_image, LTRIM(REPLACE(b.base_image, '[path]', ''), '/') AS base_image, LTRIM(REPLACE(b.small_image, '[path]', ''), '/') AS small_image,
                 LTRIM(ga.gallery_0, '/') AS gallery_0, LTRIM(ga.gallery_1, '/') AS gallery_1, LTRIM(ga.gallery_2, '/') AS gallery_2, LTRIM(ga.gallery_3, '/') AS gallery_3, LTRIM(ga.gallery_4, '/') AS gallery_4, LTRIM(ga.gallery_5, '/') AS gallery_5, LTRIM(ga.gallery_6, '/') AS gallery_6, LTRIM(ga.gallery_7, '/') AS gallery_7, LTRIM(ga.gallery_8, '/') AS gallery_8, LTRIM(ga.gallery_9, '/') AS gallery_9

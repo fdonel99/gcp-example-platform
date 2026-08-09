@@ -63,6 +63,10 @@ def report_fornitori(request):
             WHERE o.DATA_SPEDIZIONE != "000000"
           )
           GROUP BY ALL
+          ORDER BY 
+            anno_spedizione DESC, 
+            mese_spedizione DESC, 
+            fornitore DESC
         );
     """
 
@@ -91,6 +95,10 @@ def report_fornitori(request):
                 SUM(qta_gratuita) AS qta_gratuita
             FROM `{project_id}.{dataset_table}`
             GROUP BY ALL
+            ORDER BY 
+                anno_spedizione DESC, 
+                mese_spedizione DESC, 
+                fornitore DESC
         """
         
         df = bq_client.query(query_select).to_dataframe()
