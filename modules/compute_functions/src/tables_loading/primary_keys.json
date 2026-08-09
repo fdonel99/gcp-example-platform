@@ -6,6 +6,6 @@
     "dbo_m2_additional_attributes" : "id",
     "dbo_m2_articoli" : "id",
     "dbo_movimenti" : ["SKU", "MAGAZZINO", "DATA_MOVIMENTO","DOCUMENTO","NOMEFILE","ID"],
-    "dbo_ordini" : ["ORDINE" , "NUMERO_RIGA"],
-    "dbo_ordini_testate_pag" : "ORDINR"
+    "dbo_ordini_righe" : ["ORDINE" , "NUMERO_RIGA"],
+    "dbo_ordini_testate_pag" : "ORDINE"
 }

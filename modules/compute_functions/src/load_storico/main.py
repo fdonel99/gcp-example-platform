@@ -18,6 +18,7 @@ from googleapiclient.http import MediaIoBaseDownload
 from google.cloud import bigquery
 from google.cloud import storage
 import polars as pl
+import polars.selectors as cs 
 import google.auth
 import gspread
 
@@ -60,20 +61,18 @@ def run_load_storico(request):
     """
     Funzione manuale/una-tantum:
     - Scarica il file storico da Drive
-    - Lo elabora con Polars e Sheets
+    - Lo elabora con Polars e Sheets (Applicando RTRIM a tutti i campi di testo)
     - Lo carica in TRUNCATE nel Dataset Storico
     """
     request_json = request.get_json(silent=True) or {}
+    
     folder_id = request_json.get('folder_id') or os.environ.get('FOLDER_ID')
     target_filename = request_json.get('file_name', '2023-2024-2025.zip')
     
-    if 'folder_id' not in request_json:
-        msg = "Parametro 'folder_id' mancante nel body JSON."
+    if not folder_id:
+        msg = "Parametro 'folder_id' mancante. Forniscilo nel JSON o nel Terraform."
         invia_notifica_telegram(f"🚨 *Errore!*\n{msg}")
         return f"Errore: {msg}", 400
-
-    folder_id = request_json['folder_id']
-    target_filename = request_json.get('file_name', '2023-2024-2025.zip')
     
     local_zip_path = '/tmp/storico.zip'
     extract_to = '/tmp/extracted_storico/'
@@ -130,11 +129,17 @@ def run_load_storico(request):
 
         gc_sheets = gspread.authorize(credentials)
         sh = gc_sheets.open_by_key(SHEET_ID)
+        
         ws_mov = sh.worksheet('MOVIMENTO')
         df_mov = pl.DataFrame(ws_mov.get_all_records()).select(["MOVIMENTO", "DESCRIZIONE_MOVIMENTO", "CLASSIFICAZIONE"]).unique(subset=["MOVIMENTO"])
+        
         ws_tipo = sh.worksheet('TIPO')
         df_tipo = pl.DataFrame(ws_tipo.get_all_records()).select(["TIPO", "DESCRIZIONE_TIPO"]).unique(subset=["TIPO"])
 
+        # Eseguo RTRIM anche sui fogli di supporto per evitare mancati match!
+        df_mov = df_mov.with_columns(cs.string().str.strip_chars_end())
+        df_tipo = df_tipo.with_columns(cs.string().str.strip_chars_end())
+        
         df_mov = df_mov.with_columns(pl.col("MOVIMENTO").cast(pl.Utf8))
         df_tipo = df_tipo.with_columns(pl.col("TIPO").cast(pl.Utf8))
 
@@ -153,6 +158,8 @@ def run_load_storico(request):
                 print(f"Elaborazione tabella {t_name}...")
                 query = f"SELECT * FROM {t_name}"
                 df = pl.read_database_uri(query=query, uri=sqlite_uri)
+            
+                df = df.with_columns(cs.string().str.strip_chars_end())
                 
                 if t_name == "dbo_movimenti":
                     if "SKU" in df.columns:
@@ -188,7 +195,6 @@ def run_load_storico(request):
             except Exception as e:
                 print(f"❌ Errore BQ per {t_name}: {e}")
 
-        # 7. Pulizia Totale
         print("Svuotamento GCS e disco locale...")
         for p_path in parquets_da_eliminare:
             if os.path.exists(p_path): os.remove(p_path)
@@ -197,7 +203,7 @@ def run_load_storico(request):
         if os.path.exists(local_zip_path):
             os.remove(local_zip_path)
 
-        invia_notifica_telegram(f"✅ *Caricamento Storico Completato!*\nIl file `{target_filename}` è stato elaborato e salvato nel dataset `{DATASET_STORICO_ID}`.")
+        invia_notifica_telegram(f"✅ *Caricamento Storico Completato!*\nIl file `{target_filename}` è stato elaborato (con pulizia degli spazi in eccesso) e salvato nel dataset `{DATASET_STORICO_ID}`.")
         
         return "Caricamento storico completato con successo", 200
 
