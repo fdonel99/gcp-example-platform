@@ -137,8 +137,8 @@ def run_load_storico(request):
         df_tipo = pl.DataFrame(ws_tipo.get_all_records()).select(["TIPO", "DESCRIZIONE_TIPO"]).unique(subset=["TIPO"])
 
         # Eseguo RTRIM anche sui fogli di supporto per evitare mancati match!
-        df_mov = df_mov.with_columns(cs.string().str.strip_chars_end())
-        df_tipo = df_tipo.with_columns(cs.string().str.strip_chars_end())
+        df_mov = df_mov.with_columns(cs.string().str.strip_chars())
+        df_tipo = df_tipo.with_columns(cs.string().str.strip_chars())
         
         df_mov = df_mov.with_columns(pl.col("MOVIMENTO").cast(pl.Utf8))
         df_tipo = df_tipo.with_columns(pl.col("TIPO").cast(pl.Utf8))
@@ -159,7 +159,7 @@ def run_load_storico(request):
                 query = f"SELECT * FROM {t_name}"
                 df = pl.read_database_uri(query=query, uri=sqlite_uri)
             
-                df = df.with_columns(cs.string().str.strip_chars_end())
+                df = df.with_columns(cs.string().str.strip_chars())
                 
                 if t_name == "dbo_movimenti":
                     if "SKU" in df.columns:

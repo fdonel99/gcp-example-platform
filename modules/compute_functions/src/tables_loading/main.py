@@ -14,10 +14,10 @@ from datetime import datetime, timedelta, timezone
 import functions_framework
 from google.cloud import bigquery
 import polars as pl
+import polars.selectors as cs  # Aggiunto per selezionare i campi stringa
 import google.auth
 import gspread
 
-# --- CONFIGURAZIONE TELEGRAM E AMBIENTE ---
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 PROJECT_ID = os.environ.get('GOOGLE_CLOUD_PROJECT', '')
@@ -43,7 +43,6 @@ def load_chiavi():
         return {}
 
 CHIAVI_PRIMARIE = load_chiavi()
-
 
 def invia_notifica_telegram(messaggio):
     """Invia un messaggio di testo tramite il bot Telegram con prefisso ambiente."""
@@ -73,7 +72,6 @@ def invia_notifica_telegram(messaggio):
         print(f"✅ Notifica Telegram inviata con successo per l'ambiente {prefisso.strip(' *[-]')}")
     except Exception as e:
         print(f"⚠️ Errore durante l'invio della notifica Telegram: {e}")
-
 
 @functions_framework.http
 def run_sqlite_to_bigquery(request):
@@ -170,6 +168,9 @@ def run_sqlite_to_bigquery(request):
                 
                 df = pl.read_database_uri(query=query, uri=sqlite_uri)
                 
+                # --- APPLICAZIONE TRIM GLOBALE SU TUTTI I CAMPI TESTO ---
+                df = df.with_columns(cs.string().str.strip_chars())
+                
                 if t_name == "dbo_movimenti":
                     print("Applicazione regole custom e arricchimento dati per dbo_movimenti...")
                     
@@ -191,6 +192,10 @@ def run_sqlite_to_bigquery(request):
                     ws_tipo = sh.worksheet('TIPO')
                     df_tipo = pl.DataFrame(ws_tipo.get_all_records())
                     df_tipo = df_tipo.select(["TIPO", "DESCRIZIONE_TIPO"]).unique(subset=["TIPO"])
+                    
+                    # --- APPLICAZIONE TRIM ANCHE SUI DATI PROVENIENTI DA GOOGLE SHEETS ---
+                    df_mov = df_mov.with_columns(cs.string().str.strip_chars())
+                    df_tipo = df_tipo.with_columns(cs.string().str.strip_chars())
                     
                     df = df.with_columns([
                         pl.col("MOVIMENTO").cast(pl.Utf8),
