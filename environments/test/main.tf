@@ -32,7 +32,7 @@ module "data_storage" {
 }
 
 # =======================================================
-# 3. COMPUTE FUNCTIONS: Funzioni Serverless
+# 3. COMPUTE FUNCTIONS
 # =======================================================
 module "compute_functions" {
   source                         = "../../modules/compute_functions"

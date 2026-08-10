@@ -147,6 +147,30 @@ resource "google_storage_bucket" "bucket_listino_costi_trasporto" {
   }
 }
 
+resource "google_storage_bucket" "bucket_for_local_tests" {
+  count                       = local.is_test ? 1 : 0
+  
+  project                     = var.project_id
+  name                        = "bkt-for-local-tests-${var.project_id}"
+  location                    = "EU"
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  force_destroy               = true 
+
+  labels = {
+    scopo = "bkt-local-tests"
+  }
+  lifecycle_rule {
+    condition {
+      age = 1
+    }
+    action {
+      type = "Delete"
+    }
+  }
+}
+
 /*
 # =======================================================
 # BUCKET DI STATO (GESTITO MANUALMENTE DA CONSOLE)
