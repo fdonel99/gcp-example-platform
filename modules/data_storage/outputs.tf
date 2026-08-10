@@ -40,5 +40,5 @@ output "bucket_listino_costi_trasporto_name" {
 
 output "bucket_for_local_tests_name" {
   description = "Il nome del bucket di input per le tariffe"
-  value       = google_storage_bucket.bucket_for_local_tests.name
+  value       = join("", google_storage_bucket.bucket_for_local_tests[*].name)
 }
