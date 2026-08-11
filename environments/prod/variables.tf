@@ -30,6 +30,7 @@ variable "telegram_chat_id" {
 variable "drive_folder_id" {
   description = "L'ID della cartella Google Drive da cui estrarre i file"
   type        = string
+  default     = "1uHYaM5wGusC2GY7v-Vp-xIq5U0KcZ8FJ"
 }
 
 variable "folder_id_storico" {

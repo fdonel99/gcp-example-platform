@@ -26,7 +26,6 @@ def report_giacenze(request):
         print(f"Ambiente di PROD rilevato. Uso Sheet ID: {sheet_id}")
         sheet_name = f'REPORT_FORNITORI_{today_str}'
     
-    # 1. Questa query rimane invariata: salva su BigQuery il dettaglio per SINGOLA DATA
     sql_create_table = f"""
         CREATE OR REPLACE TABLE `{project_id}.{dataset_table}` AS (
             SELECT 

@@ -46,5 +46,5 @@ resource "google_project_iam_member" "donellifj_storage_admin" {
   
   project = var.project_id
   role    = each.value
-  member  = "user:donellifj@srl.com"
+  member  = "user:donellifjsrl@gmail.com"
 }
