@@ -105,7 +105,7 @@ locals {
 }
 
 resource "google_project_iam_member" "local_test_permissions" {
-  for_each = var.environment == "test" ? toset(local_test_roles) : toset([])
+  for_each = var.environment == "test" ? toset(local.local_test_roles) : toset([])
   
   project = var.project_id
   role    = each.value
