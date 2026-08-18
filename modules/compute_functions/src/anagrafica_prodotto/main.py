@@ -149,9 +149,33 @@ def anagrafica_prodotto(request):
         gc = gspread.authorize(credentials)
         sh = gc.open_by_key(sheet_id)
 
-        print(f"4. Creazione del nuovo foglio: '{sheet_name}'...")
+        print("4. Controllo preventivo storico fogli (Max 4 consentiti)...")
         
+        fogli_predefiniti = ["Foglio1", "Sheet1"]
+        for nome_predefinito in fogli_predefiniti:
+            try:
+                foglio_vuoto = sh.worksheet(nome_predefinito)
+                if len(sh.worksheets()) > 1:
+                    sh.del_worksheet(foglio_vuoto)
+                    print(f"Foglio di default '{nome_predefinito}' eliminato con successo.")
+            except gspread.exceptions.WorksheetNotFound:
+                pass
+
         tutti_i_fogli = sh.worksheets()
+        
+        max_fogli_consentiti = 4 
+        
+        if len(tutti_i_fogli) >= max_fogli_consentiti:
+            fogli_da_eliminare = tutti_i_fogli[max_fogli_consentiti - 1:]
+            for foglio in fogli_da_eliminare:
+                if foglio.title.lower() != sheet_name.lower():
+                    print(f"Eliminazione preventiva del foglio vecchio per liberare spazio: '{foglio.title}'...")
+                    sh.del_worksheet(foglio)
+
+
+        print(f"5. Creazione del nuovo foglio: '{sheet_name}'...")
+        
+        tutti_i_fogli = sh.worksheets() 
         worksheet_oggi = None
         
         for ws in tutti_i_fogli:
@@ -178,29 +202,7 @@ def anagrafica_prodotto(request):
 
         worksheet_oggi.set_basic_filter()
 
-        print("5. Controllo storico fogli (Max 10 consentiti)...")
-
-        fogli_predefiniti = ["Foglio1", "Sheet1"]
-        for nome_predefinito in fogli_predefiniti:
-            try:
-                foglio_vuoto = sh.worksheet(nome_predefinito)
-                if len(sh.worksheets()) > 1:
-                    sh.del_worksheet(foglio_vuoto)
-                    print(f"Foglio di default '{nome_predefinito}' eliminato con successo.")
-            except gspread.exceptions.WorksheetNotFound:
-                pass
-
-        tutti_i_fogli = sh.worksheets()
-        
-        if len(tutti_i_fogli) > 10:
-            fogli_da_eliminare = tutti_i_fogli[10:]
-            for foglio in fogli_da_eliminare:
-                print(f"Eliminazione del foglio vecchio: '{foglio.title}'...")
-                sh.del_worksheet(foglio)
-        else:
-            print(f"Fogli attuali: {len(tutti_i_fogli)}. Nessuna pulizia necessaria.")
-
-        messaggio = f"Successo! Dati caricati nel foglio '{sheet_name}' e storico ottimizzato."
+        messaggio = f"Successo! Dati caricati nel foglio '{sheet_name}' e storico ottimizzato per rispettare i limiti di GSheets."
         print(messaggio)
         return (messaggio, 200)
 
