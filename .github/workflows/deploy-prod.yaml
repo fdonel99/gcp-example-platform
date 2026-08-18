@@ -43,9 +43,22 @@ jobs:
 
       - name: Terraform Plan
         run: terraform plan
-
+      
       - name: Terraform Apply
         run: terraform apply -auto-approve 
+
+      - name: Estrai Output Document AI
+        id: tf_outputs
+        run: |
+          # Prende il path completo generato da Terraform 
+          FULL_PATH=$(terraform output -raw document_ai_processor_id)
+          
+          # Ritaglia solo l'ultimo pezzo (l'ID alfanumerico)
+          PROCESSOR_ID=$(echo $FULL_PATH | awk -F'/' '{print $6}')
+          
+          # Lo salva nelle variabili d'ambiente di GitHub Actions
+          echo "PROCESSOR_ID=$PROCESSOR_ID" >> $GITHUB_ENV
+          echo "Processore estratto con successo: $PROCESSOR_ID"
       
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -54,13 +67,14 @@ jobs:
 
       - name: Installa dipendenze Python
         working-directory: '.' 
-        run: pip install openai 
+        run: pip install openai requests
 
       - name: Esegui Agenti di Documentazione
         working-directory: '.'
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }} 
           ENVIRONMENT: "prod"
+          PROCESSOR_ID: ${{ env.PROCESSOR_ID }}
         run: python scripts/generate_docs.py
 
       - name: Commit e Push Documentazione
