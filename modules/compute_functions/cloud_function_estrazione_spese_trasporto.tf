@@ -40,6 +40,7 @@ resource "google_cloudfunctions2_function" "function_estrazione_spese_trasporto"
       PROJECT_ID         = var.project_id
       LOCATION           = var.region
       SPREADSHEET_ID = "1TYpxmD6H_9v-ZeeOqSZqiHF50cyzj6xpg51zTaTEQWE"
+      DEPLOY_HASH    = data.archive_file.zip_estrazione_spese_trasporto.output_md5
     }
   }
 

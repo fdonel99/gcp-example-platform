@@ -39,7 +39,8 @@ resource "google_cloudfunctions2_function" "function_calcolo_spese_trasporto" {
     timeout_seconds                  = 60
     service_account_email            = var.cloud_worker_sa_email
     environment_variables = {
-      SPREADSHEET_ID = "1TYpxmD6H_9v-ZeeOqSZqiHF50cyzj6xpg51zTaTEQWE"
+      SPREADSHEET_ID = "1TYpxmD6H_9v-ZeeOqSZqiHF50cyzj6xpg51zTaTEQWE",
+      DEPLOY_HASH    = data.archive_file.zip_calcolo_spese_trasporto.output_md5
     }
   }
 
