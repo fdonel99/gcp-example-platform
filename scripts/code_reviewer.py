@@ -74,9 +74,10 @@ Il tuo compito è analizzare questo Git Diff in cerca di PROBLEMI GRAVI.
 Cerca ESCLUSIVAMENTE problemi critici come:
 - Variabili hardcoded, password, token o secret in chiaro.
 - Porte aperte al pubblico in modo molto pericoloso (es. SSH 22 su 0.0.0.0/0).
-- Permessi IAM palesemente non sicuri.
 
-Tutte le CHIAVI API devono generare un BLOCCO DEL DEPLOY e un ALERT su Telegram. Gli ID, invece, devono essere segnalati ma non bloccare il deploy.
+Tutte le CHIAVI API devono generare un BLOCCO DEL DEPLOY e un ALERT su Telegram. 
+Gli ID, invece, devono essere segnalati ma non bloccare il deploy.
+Anche i permessi IAM non sicuri devono essere segnalati ma non bloccare il deploy.
 
 REGOLE PER LA RISPOSTA:
 1. Se il codice è sicuro, rispondi ESATTAMENTE E SOLO con la stringa: TUTTO_OK
