@@ -16,7 +16,8 @@ locals {
     "roles/run.invoker",
     "roles/eventarc.eventReceiver",
     "roles/aiplatform.user",
-    "roles/secretmanager.secretAccessor"
+    "roles/secretmanager.secretAccessor",
+    "roles/documentai.apiUser"
   ]
 }
 
