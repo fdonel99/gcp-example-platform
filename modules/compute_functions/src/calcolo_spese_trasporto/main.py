@@ -384,6 +384,20 @@ def elabora_costi_logistici(input_path, output_path):
         df = df.iloc[1:].reset_index(drop=True)
 
     df.columns = df.columns.astype(str).str.upper().str.strip()
+    
+    # --- FIX: Deduplicazione automatica dei nomi delle colonne ---
+    new_cols = []
+    seen = {}
+    for col in df.columns:
+        if col not in seen:
+            seen[col] = 1
+            new_cols.append(col)
+        else:
+            new_cols.append(f"{col}_{seen[col]}")
+            seen[col] += 1
+    df.columns = new_cols
+    # -------------------------------------------------------------
+
     print("Estrazione e pulizia delle dimensioni...")
     df[['DIMENSIONE_1', 'DIMENSIONE_2', 'DIMENSIONE_3']] = df['DIMENSIONI'].apply(estrai_dimensioni)
 
