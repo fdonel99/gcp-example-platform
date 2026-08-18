@@ -46,18 +46,29 @@ def get_recent_diff():
 # ==========================================
 def send_telegram_alert(testo_allarme):
     print("Invio alert su Telegram in corso...")
-    messaggio = f"🚨 *ALLARME SICUREZZA PIPELINE* 🚨\n\nHo bloccato il deploy! Motivo:\n\n{testo_allarme}"
+    
+    # TRONCAMENTO SICUREZZA: Evita l'errore 400 causato dal limite di 4096 caratteri
+    if len(testo_allarme) > 3900:
+        testo_allarme = testo_allarme[:3900] + "\n\n[...Report troncato per limiti di spazio Telegram]"
+        
+    messaggio = f"🚨 ALLARME SICUREZZA PIPELINE 🚨\n\nHo bloccato il deploy! Motivo:\n\n{testo_allarme}"
     url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
+    
+    # RIMOSSO parse_mode: "Markdown" per evitare crash causati dalla formattazione imprevedibile dell'LLM
     payload = {
         "chat_id": telegram_chat_id,
-        "text": messaggio,
-        "parse_mode": "Markdown"
+        "text": messaggio
     }
+    
     try:
         response = requests.post(url, json=payload)
         response.raise_for_status() # Lancia un'eccezione se Telegram risponde con un errore
+        print("✅ Alert Telegram inviato con successo!")
     except Exception as e:
         print(f"❌ Errore durante l'invio dell'alert su Telegram: {e}")
+        # Stampa il corpo della risposta di Telegram per un debug più facile
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Dettagli API Telegram: {e.response.text}")
 
 # ==========================================
 # 4. Agente Revisore
