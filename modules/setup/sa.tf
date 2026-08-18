@@ -91,9 +91,9 @@ resource "google_service_account" "local_test_sa" {
   # Crea la risorsa solo se l'ambiente è "test", altrimenti ne crea zero
   count        = var.environment == "test" ? 1 : 0
   
-  account_id   = "local-test-infografiche"
-  display_name = "SA Test Locali Infografiche"
-  description  = "Identità dedicata ai test in locale per script Python (Document AI e Storage)"
+  account_id   = "local-test"
+  display_name = "SA Test Locali"
+  description  = "Identità dedicata ai test in locale"
   project      = var.project_id
 }
 
