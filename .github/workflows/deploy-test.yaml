@@ -44,9 +44,6 @@ jobs:
       - name: Terraform Plan
         run: terraform plan
 
-      - name: Terraform Apply
-        run: terraform apply -auto-approve
-      
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -54,7 +51,18 @@ jobs:
 
       - name: Installa dipendenze Python
         working-directory: '.' 
-        run: pip install openai
+        run: pip install openai requests
+
+      - name: AI Security Code Review
+        working-directory: '.'
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/code_reviewer.py
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
 
       - name: Esegui Agenti di Documentazione
         working-directory: '.'
