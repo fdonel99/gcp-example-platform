@@ -17,4 +17,4 @@ Thumbs.db
 .vscode/
 
 #Ignora le chiavi del service per i test locali
-**/modules/compute_functions/src/*key*.json
+**/modules/compute_functions/src/local_tests/

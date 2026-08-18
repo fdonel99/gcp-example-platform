@@ -1,7 +1,7 @@
 functions-framework==3.*
 google-cloud-storage
-google-cloud-vision
+google-cloud-documentai
 google-cloud-aiplatform
-opencv-python-headless
-numpy
 Pillow
+numpy
+opencv-python-headless

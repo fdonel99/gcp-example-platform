@@ -4,6 +4,11 @@ data "archive_file" "zip_traduzione_infografiche" {
   type        = "zip"
   source_dir  = "${path.module}/src/traduzione_infografiche" 
   output_path = "${path.module}/src/traduzione_infografiche.zip"
+  
+  # Esclude solo la cache locale generata dai test
+  excludes    = [
+    "__pycache__"
+  ]
 }
 
 resource "google_storage_bucket_object" "upload_zip_traduzione_infografiche" {
@@ -16,10 +21,12 @@ resource "google_cloudfunctions2_function" "function_traduzione_infografiche" {
   project     = var.project_id
   name        = "traduzione-infografiche-fn-${var.environment}"
   location    = var.region
-    labels = {
-    scopo       = "fn-traduzione-infografiche"
+  
+  labels = {
+    scopo = "fn-traduzione-infografiche"
   }
-  description = "Trigger file input per la pipeline delle infografiche (${var.environment})"
+  
+  description = "Pipeline Multi-Agente per traduzione infografiche (${var.environment})"
   
   build_config {
     runtime     = "python311"
@@ -35,11 +42,17 @@ resource "google_cloudfunctions2_function" "function_traduzione_infografiche" {
 
   service_config {
     max_instance_count               = 5
-    max_instance_request_concurrency = 80
+    # NOTA SULLA CONCORRENZA: L'elaborazione immagini con Pillow e OpenCV consuma molta RAM. 
+    # Se noti errori OOM (Out Of Memory) quando carichi tante immagini insieme, 
+    # valuta di abbassare questo valore (es. a 1 o 5).
+    max_instance_request_concurrency = 80 
+    
     available_memory                 = "2G" 
     available_cpu                    = "1" 
-    timeout_seconds                  = 540
+    timeout_seconds                  = 540 # 9 Minuti, ideali per i cicli di QA dell'Intelligenza Artificiale
+    
     service_account_email            = var.cloud_worker_sa_email
+    
     environment_variables = {
       PROJECT_ID         = var.project_id
       REGION             = var.region
