@@ -4,31 +4,35 @@ on:
   push:
     branches:
       - main 
+    paths-ignore:
+      - 'docs/**.md'
+      - '**.md'
+
+permissions:
+  contents: write
 
 jobs:
   terraform:
     name: "Terraform Deploy Prod"
     runs-on: ubuntu-latest
     
-    # NOVITÀ: Diciamo alla pipeline di eseguire i comandi in questa cartella!
     defaults:
       run:
         working-directory: environments/prod
         
-    # AGGIUNTA: Definiamo le variabili d'ambiente per Terraform a livello di job
     env:
-      # Sostituisci "telegram_token_value" se l'hai chiamata "telegram_token"
       TF_VAR_telegram_token_value: ${{ secrets.TELEGRAM_TOKEN }}
       TF_VAR_telegram_chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
       - name: Checkout del codice
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
 
       - name: Autenticazione GCP (Prod)
         uses: google-github-actions/auth@v2
         with:
-          # Assicurati che questo segreto abbia i permessi sul progetto di Produzione
           credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
       - name: Setup Terraform
@@ -41,4 +45,28 @@ jobs:
         run: terraform plan
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve 
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Installa dipendenze Python
+        working-directory: '.' 
+        run: pip install openai 
+
+      - name: Esegui Agenti di Documentazione
+        working-directory: '.'
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }} 
+          ENVIRONMENT: "prod"
+        run: python scripts/generate_docs.py
+
+      - name: Commit e Push Documentazione
+        working-directory: '.'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/ .docs_state_*.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "docs: aggiornamento doc post-deploy [skip ci]" && git push)
