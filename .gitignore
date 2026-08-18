@@ -12,3 +12,6 @@ crash.log
 # Ignora file di sistema operativo
 .DS_Store
 Thumbs.db
+
+#Ignora le impostazioni di autofetch
+.vscode/
