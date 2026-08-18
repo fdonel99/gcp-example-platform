@@ -28,5 +28,5 @@ resource "google_document_ai_processor" "ocr_processor" {
 # 3. Output per recuperare l'ID univoco generato da GCP
 output "document_ai_processor_id" {
   value       = google_document_ai_processor.ocr_processor.id
-  description = "L'ID univoco del processore Document AI (${var.environment})"
+  description = "L'ID univoco del processore Document AI" 
 }

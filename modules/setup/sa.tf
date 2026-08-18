@@ -83,3 +83,31 @@ resource "google_project_iam_member" "cf_scheduler_invoker_permission" {
   role    = "roles/run.invoker"
   member  = "serviceAccount:${google_service_account.cf_scheduler.email}"
 }
+
+# ==========================================================
+# SERVICE ACCOUNT TEST LOCALI (Deployato SOLO in ambiente Test)
+# ==========================================================
+resource "google_service_account" "local_test_sa" {
+  # Crea la risorsa solo se l'ambiente è "test", altrimenti ne crea zero
+  count        = var.environment == "test" ? 1 : 0
+  
+  account_id   = "local-test-infografiche"
+  display_name = "SA Test Locali Infografiche"
+  description  = "Identità dedicata ai test in locale per script Python (Document AI e Storage)"
+  project      = var.project_id
+}
+
+locals {
+  local_test_roles = [
+    "roles/documentai.apiUser",
+    "roles/storage.objectAdmin"
+  ]
+}
+
+resource "google_project_iam_member" "local_test_permissions" {
+  for_each = var.environment == "test" ? toset(local_test_roles) : toset([])
+  
+  project = var.project_id
+  role    = each.value
+  member  = "serviceAccount:${google_service_account.local_test_sa[0].email}"
+}
