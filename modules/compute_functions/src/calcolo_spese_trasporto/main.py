@@ -517,6 +517,7 @@ def calcola_spese_trasporto(cloud_event):
         output_blob.upload_from_filename(local_output)
         
         # Elimina il file originale
+        ##
         print(f"Eliminazione del file originale: {file_name}")
         blob.delete()
         print("Processo terminato con successo.")

@@ -55,7 +55,14 @@ resource "google_cloudfunctions2_function" "function_estrazione_spese_trasporto"
       value     = var.bucket_listino_costi_trasporto_name
     }
   }
+  lifecycle {
+    replace_triggered_by = [
+      google_storage_bucket_object.upload_zip_calcolo_spese_trasporto
+    ]
+  }
 }
+
+
 
 # --- PERMESSI IAM PER I TRIGGER EVENTARC ---
 

@@ -55,6 +55,12 @@ resource "google_cloudfunctions2_function" "function_calcolo_spese_trasporto" {
       value     = var.bucket_spese_trasporto_name
     }
   }
+
+  lifecycle {
+    replace_triggered_by = [
+      google_storage_bucket_object.upload_zip_calcolo_spese_trasporto
+    ]
+  }
 }
 
 data "google_project" "current" {
