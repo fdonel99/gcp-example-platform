@@ -121,7 +121,10 @@ def run_agent(agent_name, system_prompt, input_text, filename, title, current_st
     current_state[state_key] = current_hash
     return current_state
 
-if __name__ == "__main__":
+# ==========================================
+    # 5. Esecuzione
+    # ==========================================
+    if __name__ == "__main__":
         state = load_state()
         
         # Agente 1: Struttura (Usa 4o-mini)
