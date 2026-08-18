@@ -100,7 +100,8 @@ resource "google_service_account" "local_test_sa" {
 locals {
   local_test_roles = [
     "roles/documentai.apiUser",
-    "roles/storage.objectAdmin"
+    "roles/storage.objectAdmin",
+    "roles/aiplatform.user",
   ]
 }
 

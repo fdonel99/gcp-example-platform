@@ -17,22 +17,28 @@ if not all([llm_api_key, telegram_token, telegram_chat_id]):
     print("Errore: Variabili d'ambiente mancanti (LLM o Telegram).")
     sys.exit(1)
 
+# OpenRouter consiglia di passare degli header extra per evitare blocchi
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=llm_api_key,
+    default_headers={
+        "HTTP-Referer": "https://tuosito.com", # Inserisci un URL reale o fittizio
+        "X-Title": "CI-CD-Security-Guard",
+    }
 )
 
 # ==========================================
-# 2. Tool: Leggi Git Diff (Modifiche Locali)
+# 2. Tool: Leggi Git Diff
 # ==========================================
 def get_recent_diff():
     print("Recupero delle ultime modifiche del codice...")
     try:
-        # Recupera le differenze dell'ultimo commit effettuato
-        diff = subprocess.check_output(['git', 'diff', 'HEAD~1', 'HEAD'], text=True, stderr=subprocess.DEVNULL)
+        # Recupera le differenze dell'ultimo commit
+        diff = subprocess.check_output(['git', 'diff', 'HEAD~1', 'HEAD'], text=True, stderr=subprocess.PIPE)
         return diff
-    except Exception:
-        print("Impossibile recuperare il diff (potrebbe essere il primo commit). Salto la review.")
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️ Impossibile recuperare il diff: {e.stderr.strip()}")
+        print("Assicurati che la pipeline abbia scaricato la history (es. fetch-depth: 2). Salto la review.")
         sys.exit(0)
 
 # ==========================================
@@ -47,10 +53,14 @@ def send_telegram_alert(testo_allarme):
         "text": messaggio,
         "parse_mode": "Markdown"
     }
-    requests.post(url, json=payload)
+    try:
+        response = requests.post(url, json=payload)
+        response.raise_for_status() # Lancia un'eccezione se Telegram risponde con un errore
+    except Exception as e:
+        print(f"❌ Errore durante l'invio dell'alert su Telegram: {e}")
 
 # ==========================================
-# 4. Agente Revisore e Guardia
+# 4. Agente Revisore
 # ==========================================
 def run_security_guard():
     diff_text = get_recent_diff()
@@ -66,31 +76,34 @@ Cerca ESCLUSIVAMENTE problemi critici come:
 - Porte aperte al pubblico in modo molto pericoloso (es. SSH 22 su 0.0.0.0/0).
 - Permessi IAM palesemente non sicuri.
 
+Tutte le CHIAVI API devono generare un BLOCCO DEL DEPLOY e un ALERT su Telegram. Gli ID, invece, devono essere segnalati ma non bloccare il deploy.
+
 REGOLE PER LA RISPOSTA:
 1. Se il codice è sicuro, rispondi ESATTAMENTE E SOLO con la stringa: TUTTO_OK
 2. Se trovi criticità gravi, scrivi un breve messaggio di alert (in italiano) per lo sviluppatore, spiegando qual è il rischio. Sii conciso."""
 
     print("Analisi di sicurezza in corso con LLM...")
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Ecco il git diff dell'ultimo push:\n\n{diff_text}"}
-        ]
-    )
-    
-    llm_reply = response.choices[0].message.content.strip()
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Ecco il git diff dell'ultimo push:\n\n{diff_text}"}
+            ]
+        )
+        llm_reply = response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"❌ Errore di connessione alle API LLM: {e}")
+        sys.exit(1) # Decidi tu: exit(1) blocca la pipeline se l'LLM è down, exit(0) la fa passare.
 
-    if llm_reply == "TUTTO_OK":
+    # Controllo più tollerante per evitare falsi positivi da punteggiatura
+    if "TUTTO_OK" in llm_reply.upper():
         print("✅ Controllo superato! L'agente non ha trovato problemi di sicurezza.")
-        sys.exit(0) # Esci con 0: la pipeline prosegue!
+        sys.exit(0)
     else:
         print("❌ CRITICITÀ RILEVATA! Blocco la pipeline e invio il messaggio...")
         send_telegram_alert(llm_reply)
-        sys.exit(1) # Esci con 1: GITHUB ACTIONS FALLISCE E SI FERMA QUI!
+        sys.exit(1)
 
-# ==========================================
-# 5. Esecuzione
-# ==========================================
 if __name__ == "__main__":
     run_security_guard()

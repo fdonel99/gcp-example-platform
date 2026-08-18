@@ -28,7 +28,7 @@ jobs:
       - name: Checkout del codice
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 2
 
       - name: Autenticazione GCP (Test)
         uses: google-github-actions/auth@v2
