@@ -24,13 +24,15 @@ def agente_reviewer(original_image_path, translated_image_path, target_lang):
         
         "COMPITO 1 (LAYOUT): Verifica che i testi tradotti nell'Immagine 2 NON si sovrappongano assolutamente a icone, loghi, bollini, illustrazioni o bordi della pagina.",
         "COMPITO 2 (INTEGRITÀ): Verifica che i blocchi di testo originali siano stati effettivamente sostituiti e che non ci siano antiestetici 'buchi' bianchi o cancellazioni errate sui loghi.",
-        "COMPITO 3 (TRADUZIONE - CRITICO): L'Immagine 2 DEVE essere nella lingua target. Controlla tutti i testi grandi descrittivi (es. 'SENZA SOSTANZE CHIMICHE'). Se vedi che sono rimasti nella lingua originale (Italiano) e non sono stati tradotti, devi TASSATIVAMENTE bocciare l'immagine!",
         
-        "ESITO: Se l'Immagine 2 è leggibile, pulita, priva di collisioni E totalmente tradotta, restituisci status 'ok'. Se c'è anche un solo testo non tradotto, o una sovrapposizione, restituisci status 'ko'.",
-        "RAGIONAMENTO: Scrivi una descrizione precisa. Se bocci l'immagine per mancata traduzione, scrivi esplicitamente: 'Il testo X non è stato tradotto ed è rimasto in lingua originale'.",
+        # QUI ABBIAMO AGGIUNTO L'ECCEZIONE PER IL QA
+        "COMPITO 3 (TRADUZIONE E LE SUE ECCEZIONI - CRITICO): Verifica che i testi descrittivi principali, i titoli e i paragrafi siano stati tradotti. TUTTAVIA, ci sono delle ECCEZIONI ASSOLUTE: i testi disposti a cerchio (es. 'DERMATOLOGICAMENTE TESTATO', 'RICICLABILE 100%', 'SENZA PARABENI'), i bollini, i sigilli grafici e le scritte stampate fisicamente sui prodotti DEVONO RESTARE IN ITALIANO. Se noti che questi testi circolari o loghi sono rimasti in italiano, È CORRETTO COSÌ! NON bocciare l'immagine per questo motivo. Boccia l'immagine SOLO se i testi discorsivi/descrittivi esterni ai loghi sono rimasti in italiano.",
+        
+        "ESITO: Se l'Immagine 2 è leggibile, pulita, priva di collisioni E i testi principali sono tradotti (al netto delle eccezioni sui loghi/cerchi), restituisci status 'ok'. Restituisci 'ko' SOLO se ci sono sovrapposizioni o se un testo discorsivo/paragrafo è stato dimenticato in italiano.",
+        "RAGIONAMENTO: Scrivi una descrizione precisa. Se bocci l'immagine, specifica esattamente QUALE testo descrittivo (non a cerchio) non è stato tradotto o dove si trova la sovrapposizione.",
         
         "Restituisci SOLO un JSON valido strutturato esattamente in questo modo:",
-        "{\n  \"status\": \"ok\",\n  \"ragionamento\": \"Spiegazione dettagliata del controllo visivo e linguistico...\"\n}"
+        "{\n  \"status\": \"ok\",\n  \"ragionamento\": \"Spiegazione dettagliata...\"\n}"
     ]
 
     model = GenerativeModel("gemini-3.6-flash") 

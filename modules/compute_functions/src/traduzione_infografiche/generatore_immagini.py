@@ -21,20 +21,17 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
     max_size = 120
     
     # --- 1. PARSING DEL MARKDOWN OTTIMIZZATO ---
-    # Analizziamo il testo in paragrafi UNA sola volta. 
-    # Questo mantiene attiva la memoria del grassetto tra una riga e l'altra!
     paragrafi = testo_md.split('\n')
     struttura_paragrafi = []
     
-    bold_mode_global = False  # La memoria del grassetto ora è GLOBALE
+    bold_mode_global = False  
     
     for paragrafo in paragrafi:
         raw_words = paragrafo.split()
         if not raw_words:
-            struttura_paragrafi.append([]) # Preserva le righe vuote (doppio a capo)
+            struttura_paragrafi.append([]) 
             continue
             
-        # Gestione punteggiatura attaccata
         words = []
         for rw in raw_words:
             if rw.replace('**', '') in [':', ';', '!', '?', '-', '»', '”'] and words:
@@ -46,17 +43,14 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
         for w in words:
             clean_w = w
             
-            # Caso 1: Parola interamente avvolta in **parola**
             if clean_w.startswith('**') and clean_w.endswith('**') and len(clean_w) >= 4:
                 words_info.append({"text": clean_w[2:-2], "bold": True})
                 continue
                 
-            # Caso 2: Inizio del grassetto
             if clean_w.startswith('**'):
                 bold_mode_global = True
                 clean_w = clean_w[2:]
                 
-            # Caso 3: Fine del grassetto
             end_bold = False
             if '**' in clean_w:
                 end_bold = True
@@ -76,6 +70,12 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
     best_lines = []
     best_total_h = 0
     best_line_h = 0
+    
+    # Variabili di sicurezza dichiarate FUORI dal ciclo
+    # (prevengono l'errore UnboundLocalError se c'è sempre overflow)
+    fallback_lines = []
+    fallback_total_h = 0
+    fallback_line_h = 0
         
     for size in range(max_size, min_size - 1, -2):
         if size > box_height * 0.90 and ruolo != "Titolo":
@@ -120,17 +120,27 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
                 line_w_exact = current_w - current_line[-1]["w_space"] + current_line[-1]["w"]
                 lines.append({"words": current_line, "w": line_w_exact})
                 
-        if word_overflow: continue
-            
+        # Calcoliamo sempre le metriche, anche in caso di overflow!
+        # Così avremo un dato valido in caso di fallback forzato a fine ciclo
         line_height = size * 1.15
         total_h = len(lines) * line_height
         
+        fallback_lines = lines
+        fallback_total_h = total_h
+        fallback_line_h = line_height
+        
+        if word_overflow: 
+            continue
+            
         if total_h <= box_height * moltiplicatore_altezza:
             best_lines = lines; best_total_h = total_h; best_line_h = line_height
             break
             
+    # Se ha superato il ciclo senza mai trovare la dimensione perfetta, usa l'ultimo calcolo (fallback)
     if not best_lines:
-        best_lines = lines; best_total_h = total_h; best_line_h = line_height
+        best_lines = fallback_lines
+        best_total_h = fallback_total_h
+        best_line_h = fallback_line_h
         
     current_y = box_y + (box_height - best_total_h) / 2
     
