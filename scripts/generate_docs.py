@@ -60,13 +60,24 @@ def get_project_structure(root_dir="."):
                 tree_lines.append(f"{subindent}{f}")
     return "\n".join(tree_lines)
 
-def get_terraform_code():
+def get_infra_and_functions_code():
+    """Raccoglie il codice Terraform e il codice delle Cloud Functions."""
+    # Trova sia i file Terraform che i file Python
     tf_files = glob.glob("**/*.tf", recursive=True)
+    py_files = glob.glob("**/*.py", recursive=True)
+    
+    all_files = tf_files + py_files
     content = ""
-    for file in tf_files:
-        if ".terraform" not in file:
-            with open(file, "r") as f:
-                content += f"\n\n--- File: {file} ---\n\n{f.read()}"
+    
+    for file in all_files:
+        # Escludiamo le cartelle di sistema e i nostri script di automazione
+        if ".terraform" not in file and "scripts/" not in file and "__pycache__" not in file:
+            try:
+                with open(file, "r") as f:
+                    content += f"\n\n--- File: {file} ---\n\n{f.read()}"
+            except Exception as e:
+                print(f"Errore nella lettura del file {file}: {e}")
+                
     return content
 
 def get_cicd_code():
@@ -121,8 +132,17 @@ if __name__ == "__main__":
     state = run_agent("Agente 1 (Struttura)", prompt_struttura, get_project_structure(), "struttura_logica.md", "Struttura Logica del Progetto", state, "hash_struttura", MODEL_MINI)
     
     # Agente 2: Moduli Terraform (Usa 4o)
-    prompt_moduli = "Sei un Cloud Engineer. Analizza il codice Terraform fornito. Scrivi un documento Markdown operativo spiegando per ogni modulo il ruolo di business, le risorse create, e le variabili chiave (senza incollare il codice)."
-    state = run_agent("Agente 2 (Moduli TF)", prompt_moduli, get_terraform_code(), "ruolo_moduli.md", "Ruolo dei Moduli Terraform", state, "hash_moduli", MODEL_PRO)
+    prompt_moduli = "Sei un Cloud Engineer. Analizza il codice Terraform e il codice Python (Cloud Functions) fornito. Scrivi un documento Markdown operativo spiegando: 1) Per ogni modulo Terraform, il ruolo di business e le risorse create. 2) Per ogni Cloud Function, la logica applicativa e cosa fa il codice Python al suo interno. Non incollare mai il codice sorgente nel documento finale."
+    state = run_agent(
+        "Agente 2 (Moduli e Funzioni)", 
+        prompt_moduli, 
+        get_infra_and_functions_code(),
+        "ruolo_moduli.md", 
+        "Ruolo dei Moduli e Logica Funzioni", 
+        state, 
+        "hash_moduli", 
+        MODEL_PRO
+    )
     
     # Agente 3: Pipeline CI/CD (Usa 4o-mini)
     prompt_cicd = "Sei un esperto di automazione. Analizza questi workflow GitHub Actions. Spiega in Markdown l'impostazione del flusso CI/CD, la divisione degli ambienti (es. branch main e test), quali eventi (push) scatenano le action e in che modo queste eseguono il deploy tramite Terraform."
