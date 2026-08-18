@@ -1,98 +1,55 @@
-# Ruolo dei Moduli Terraform
+# Ruolo dei Moduli e Logica Funzioni
 
-*Ultimo aggiornamento automatico: 18/08/2026 alle 12:39:07 (UTC) (Deploy in ambiente: **test**)*
-
----
-
-# Operational Guide: Terraform Module Analysis
-
-This document provides an overview of the Terraform modules used in our project. Each module has been described in terms of its business role, the resources it creates, and the key variables that facilitate its configuration.
-
-## Module Overview
-
-- **data_storage**: Manages Google BigQuery datasets and Google Cloud Storage buckets.
-- **orchestration**: Manages the scheduling of Cloud Functions using Google Cloud Scheduler.
-- **compute_functions**: Manages Google Cloud Functions for various data processing tasks.
-- **setup**: Configures project-wide settings including APIs, IAM roles, and secrets.
+*Ultimo aggiornamento automatico: 18/08/2026 alle 12:47:25 (UTC) (Deploy in ambiente: **test**)*
 
 ---
 
-## Module: data_storage
+# Documento Operativo: Gestione delle Risorse Cloud con Terraform e Cloud Functions
 
-### Business Role
-The **data_storage** module is responsible for the setup of datasets in BigQuery and storage buckets in Google Cloud Storage. This is critical for data storage, archival, and staging in our data processing pipelines.
+## Moduli Terraform
 
-### Resources Created
-- **BigQuery Datasets**: 
-  - `dataset_principale`, `dataset_dati_storico`, `dataset_dati_staging` - Used for storing primary data, historical data, and staging data respectively.
-- **Google Storage Buckets**:
-  - Buckets like `import_ns_zip`, `spese_trasporto`, `infografica_input`, etc., for storing various types of files necessary for different business functions.
+### Modulo: `data_storage`
+- **Scopo di Business**: Questo modulo è responsabile della creazione e gestione del data storage nel contesto del progetto. Impegna la gestione di dataset BigQuery e bucket di Cloud Storage, elementi chiave per le operazioni di data processing e storage fisico.
+- **Risorse Create**:
+  - Tre dataset BigQuery (`NORTHSTAR`, `NORTHSTAR_STORICO`, `NORTHSTAR_STAGING`) per immagazzinare e gestire sia i dati di produzione che quelli storici e di staging.
+  - Diversi bucket di Google Cloud Storage per gestire archiviazioni specifiche, tra cui `import_ns_zip`, `spese_trasporto`, `infografica_input`, `infografica_output`, etc., ciascuno con regole di lifecycle configurate per la manutenzione e la pulizia automatica dei dati, specialmente per ambienti di test.
 
-### Key Variables
-- `project_id`: GCP Project ID.
-- `environment`: Deployment environment (e.g., prod, test).
+### Modulo: `orchestration`
+- **Scopo di Business**: Gestisce la pianificazione automatizzata delle operazioni compute, orchestrando i jobs che attivano le Cloud Functions seguendo una cadenza temporale definita.
+- **Risorse Create**:
+  - Google Cloud Scheduler Jobs che automatizzano processi quali la traduzione di dati da Google Drive a BigQuery, il caricamento di tabelle in BigQuery, e l'esportazione di vari report su Google Sheets.
 
----
+### Modulo: `compute_functions`
+- **Scopo di Business**: Configura e distribuisce funzioni serverless (Cloud Functions) che eseguono operazioni di calcolo e trasformazione dati.
+- **Risorse Create**:
+  - Funzioni Cloud distribuite in diverse aree quali traduzione di infografiche, calcolo spese di trasporto, esportazione di anagrafica prodotti, caricamento file storici, tra altre operazioni specifiche del dominio aziendale.
 
-## Module: orchestration
+### Modulo: `setup`
+- **Scopo di Business**: Inizializzazione del project GCP, gestione delle API necessarie e configurazione dei Service Account con i ruoli appropriati per il funzionamento sicuro dei moduli e delle risorse sopra descritte.
+- **Risorse Create**:
+  - Service Accounts specifici per l'esecuzione di funzioni, scheduler e query con i relativi ruoli IAM.
+  - Configurazioni secret manager per gestire in sicurezza i token e le credenziali utilizzate all'interno delle Cloud Functions.
 
-### Business Role
-The **orchestration** module schedules the execution of Cloud Functions, enabling automated workflows crucial for the periodic data import and processing tasks.
+## Cloud Functions
 
-### Resources Created
-- **Cloud Scheduler Jobs**:
-  - `schedulazione_drive_to_gcp`: For importing data from Google Drive to BigQuery.
-  - `schedulazione_tables_loading`: For loading tables into BigQuery.
-  - Additional jobs for exporting product and vendor reports.
+### Funzione: `tables_loading`
+- **Logica Applicativa**: Questa funzione elabora i file SQLite caricati su Google Cloud Storage, estrae i dati e li trasforma, arricchendoli se necessario con ulteriori informazioni (come classificazioni aggiuntive) prima di caricarli su BigQuery. Gestisce sia le operazioni di staging che il delta merge sulle tabelle BigQuery target.
+- **Funzionalità**: Estrazione e trasformazione dati, notifica tramite Telegram in caso di errori, e utilizzo di librerie Python avanzate come `polars` per la gestione efficiente delle operazioni sui dataframe.
 
-### Key Variables
-- `project_id`: GCP Project ID.
-- `environment`: Deployment environment.
-- `region`: The region where the job is executed.
-- `function_*_uri`: URIs for various Cloud Functions.
+### Funzione: `report_fornitori`
+- **Logica Applicativa**: Genera un report aggirando dati provenienti da BigQuery. Questi dati vengono elaborati e sincronizzati in un Google Sheet dedicato, permettendo così la visualizzazione e gestione analitica su base continuativa.
+- **Funzionalità**: Creazione automatica della tabella su BigQuery e popolarla con dati aggregati, manipolando informazioni ottenute da diverse tabelle per creare un report fornitori dettagliato in Google Sheets.
 
----
+### Funzione: `traduzione_infografiche`
+- **Logica Applicativa**: Utilizza l'OCR per estrarre il testo da infografiche, esegue una traduzione e formatta i testi tradotti con le rispettive cromie e allineamenti originali prima di salvare versioni multilingua delle infografiche su Cloud Storage.
+- **Funzionalità**: Analisi delle immagini, traduzione multi-lingua tramite servizi IA, e gestione di overlay grafici per mantenere il layout visivo originale.
 
-## Module: compute_functions
+### Funzione: `drive_to_gcp`
+- **Logica Applicativa**: Automatizza l'estrazione e il caricamento di file da una cartella Google Drive a un Google Cloud Storage bucket. Si occupa di elaborare solo i file più recenti, garantendo che i dati caricati siano sempre aggiornati.
+- **Funzionalità**: Gestione delle eccezioni durante i trasferimenti di file e notifiche push via Telegram per errori o successi rilevanti.
 
-### Business Role
-The **compute_functions** module encompasses serverless functions used for data processing, including importing data, running analytics, and generating exports. Fundamental for the data integration operations.
+### Funzione: `anagrafica_prodotto`
+- **Logica Applicativa**: Compila e trasporta informazioni sui prodotti dall'ambiente BigQuery a Google Sheets. Questo processo è essenziale per tenere un inventario aggiornato delle specifiche dei prodotti.
+- **Funzionalità**: Estrazione dati da BigQuery, formattazione e popolamento di fogli elettronici con sicurezza fornita attraverso integrazioni con Google Drive APIs.
 
-### Resources Created
-- **Cloud Functions**:
-  - For tasks such as translating infographics, calculating transportation expenses, and loading historical data into BigQuery.
-
-### Key Variables
-- `project_id`: GCP Project ID.
-- `environment`: Deployment environment.
-- `bucket_*_name`: Various buckets used for deploying function code and managing function runtime triggers.
-- `cloud_worker_sa_email`: Service account used by the functions.
-
----
-
-## Module: setup
-
-### Business Role
-The **setup** module sets up foundational GCP resources such as enabling necessary APIs and creating service accounts, ensuring proper IAM configurations and secret management essential for application security and operation.
-
-### Resources Created
-- **Service Accounts**:
-  - Includes `cloud_worker`, `cloud_deployer`, `bq_scheduler`, and `cf_scheduler` with specific roles and permissions.
-- **Secret Manager Entries**:
-  - Secrets for sensitive information like Telegram tokens.
-
-### Key Variables
-- `project_id`: GCP Project ID.
-- `environment`: Deployment environment.
-- `telegram_token_value`, `telegram_chat_id_value`: Sensitive tokens used for notifications.
-
----
-
-## Important Considerations
-
-- **Environment Specifics**: Each module uses an `environment` variable to cater configurations to different deployment environments (e.g., prod, test).
-- **Security**: The `setup` module establishes critical security infrastructure, ensuring all actions taken by resources operate with the principle of least privilege.
-- **Data Lifecycle Management**: The `data_storage` module implements lifecycle rules for bucket contents, controlling data expiration based on use-case.
-- **Cross-Module Dependencies**: Variables passed among modules (e.g., URIs for Cloud Functions or service account emails) underscore the interdependencies for achieving end-to-end workflows.
-
-This document is intended to offer clarity for cloud engineers and system administrators managing infrastructure components in the defined GCP environment using Terraform. This enables efficient troubleshooting, scaling, and modification to accommodate business evolution.
+Ciascuna Cloud Function è progettata per eseguire task specifici nel contesto delle operazioni della piattaforma cloud configurata. Viene data attenzione all'integrazione efficiente delle risorse cloud esistenti, l'automatizzazione dei task e il mantenimento di standard elevati di sicurezza e ottimizzazione delle performance.

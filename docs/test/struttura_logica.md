@@ -1,74 +1,118 @@
 # Struttura Logica del Progetto
 
-*Ultimo aggiornamento automatico: 18/08/2026 alle 12:38:56 (UTC) (Deploy in ambiente: **test**)*
+*Ultimo aggiornamento automatico: 18/08/2026 alle 12:46:57 (UTC) (Deploy in ambiente: **test**)*
 
 ---
 
-# Analisi della Struttura Logica e dell'Organizzazione delle Directory del Progetto
+# Struttura logica e organizzazione delle directory del progetto
 
-Questo documento fornisce una panoramica della struttura logica e dell'organizzazione delle directory del progetto. La disposizione dei file e delle cartelle è fondamentale per garantire chiarezza, manutenibilità e facilità d'uso.
+Questo documento descrive la struttura e l'organizzazione delle directory del progetto, fornendo una panoramica della sua architettura e dei componenti utilizzati. La struttura è progettata per garantire chiarezza, mantenibilità e facilità di navigazione.
 
-## Struttura della Directory del Progetto
+## Struttura delle Directory
 
 ```
 ./
-    map.drawio
-    gha-creds-4e1656810458092a.json
-    modules/
-        data_storage/
-            merge_storico.txt
-            variables.tf
-            dataset.tf
-            outputs.tf
-            storage.tf
-        orchestration/
-            variables.tf
-            scheduler.tf
-        compute_functions/
-            # vari file di funzione
-            ...
-            src/
-                # funzioni e codici sorgente
-                ...
-        setup/
-            # configurazione necessaria
-            ...
-    bootstrap/
-        # configurazioni di avvio per vari ambienti
-        ...
-    environments/
-        # configurazioni specifiche per ambiente
-        ...
+    ├── map.drawio
+    ├── gha-creds-70ca5ac3dd18526c.json
+    ├── modules/
+    │   ├── data_storage/
+    │   │   ├── merge_storico.txt
+    │   │   ├── variables.tf
+    │   │   ├── dataset.tf
+    │   │   ├── outputs.tf
+    │   │   └── storage.tf
+    │   ├── orchestration/
+    │   │   ├── variables.tf
+    │   │   └── scheduler.tf
+    │   ├── compute_functions/
+    │   │   ├── cloud_function_traduzione_infografiche.tf
+    │   │   ├── cloud_function_calcolo_spese_trasporto.tf
+    │   │   ├── variables.tf
+    │   │   ├── cloud_function_anagrafica_prodotto.tf
+    │   │   ├── outputs.tf
+    │   │   ├── cloud_function_load_storico.tf
+    │   │   ├── cloud_function_estrazione_spese_trasporto.tf
+    │   │   ├── cloud_function_report_fornitori.tf
+    │   │   ├── cloud_function_drive_to_gcp.tf
+    │   │   ├── cloud_function_report_giacenze.tf
+    │   │   ├── cloud_function_load_tabelle.tf
+    │   │   ├── src/
+    │   │   │   ├── estrazione_spese_trasporto.zip
+    │   │   │   ├── traduzione_infografiche.zip
+    │   │   │   ├── drive_to_gcp.zip
+    │   │   │   ├── load_storico.zip
+    │   │   │   ├── report_fornitori.zip
+    │   │   │   ├── tables_loading.zip
+    │   │   │   ├── anagrafica_prodotto.zip
+    │   │   │   ├── calcolo_spese_trasporto.zip
+    │   │   │   ├── report_giacenze.zip
+    │   │   │   └── tables_loading/
+    │   │   │       ├── main.py
+    │   │   │       ├── primary_keys.json
+    │   │   │       └── requirements.txt
+    │   │   └── [altre cartelle di funzioni]
+    │   │       ├── main.py
+    │   │       └── requirements.txt
+    │   └── setup/
+    │       ├── secrets.tf
+    │       ├── sa.tf
+    │       ├── variables.tf
+    │       ├── api.tf
+    │       ├── outputs.tf
+    │       ├── policy.tf
+    │       └── accounts.tf
+    ├── bootstrap/
+    │   ├── prod/
+    │   │   └── main.tf
+    │   └── test/
+    │       └── main.tf
+    └── environments/
+        ├── prod/
+        │   ├── main.tf
+        │   ├── variables.tf
+        │   └── backend.tf
+        └── test/
+            ├── main.tf
+            ├── variables.tf
+            └── backend.tf
 ```
 
-### Descrizione delle Directory
+## Descrizione delle Directory e dei File
 
-1. **Root Directory (`./`)**
-   - **map.drawio**: Presumibilmente un diagramma di architettura o processo creato con Draw.io.
-   - **gha-creds-4e1656810458092a.json**: File di credenziali JSON, probabilmente utilizzato per l'autenticazione in API o servizi cloud.
+### Root Directory
 
-2. **modules/**: Questa directory contiene diversi moduli organizzati in sotto-directory. Ogni modulo sembra avere una specifica funzionalità o componente del sistema.
+- **`map.drawio`**: File di diagramma che rappresenta visivamente la struttura e i flussi del progetto.
+- **`gha-creds-70ca5ac3dd18526c.json`**: File contenente le credenziali per l'accesso a Google API, probabilmente utilizzato per gestire le autorizzazioni in relazione a Google Cloud.
 
-    - **data_storage/**: Contiene file relativi alla gestione e definizione delle risorse di storage, con file `*.tf` che sono logiche di definizione delle risorse in Terraform, e `merge_storico.txt`, presumibilmente usato per tracciare le modifiche o i merge di dati storici.
+### Directory `modules/`
 
-    - **orchestration/**: Gestisce le logiche di orchestrazione e schedulazione delle operazioni all'interno del progetto. Include file `variables.tf` e `scheduler.tf` per la configurazione e la pianificazione delle esecuzioni delle funzioni.
+Questa directory ospita varie sottocartelle per componenti modulari del progetto.
 
-    - **compute_functions/**: Modulo per funzioni di calcolo, dove si trovano le definizioni delle Cloud Functions scritte in Terraform e anche i pacchetti sorgente zippati (`.zip`). La struttura `src/` all'interno di questo modulo contiene ulteriori directory per ogni specifica funzione con file `main.py` e `requirements.txt` necessari per la loro esecuzione.
+- **`data_storage/`**: Contiene file relativi alla gestione dello storage dei dati, in particolare per la fusione e gestione di dati storici.
+  - **File**: `variables.tf`, `dataset.tf`, `outputs.tf`, `storage.tf` per gestire le risorse di storage.
+  
+- **`orchestration/`**: Contiene configurazioni per la pianificazione e orchestrazione delle varie funzioni.
+  - **File**: `variables.tf`, `scheduler.tf` per definire variabili e gestire la pianificazione delle attività.
+  
+- **`compute_functions/`**: Directory dedicata alle funzioni di calcolo, ognuna sembra gestire operazioni diverse come traduzioni, estrazioni e rapporti.
+  - **File**: Varie configurazioni per ciascuna funzione (es. `cloud_function_traduzione_infografiche.tf`) e `src/`, che contiene gli script sorgente e le dipendenze necessarie per ciascuna funzione.
+  
+- **`setup/`**: Contiene file necessari per impostare e configurare l'ambiente, comprese le risorse necessarie (es. Service Account, permessi).
+  - **File**: `secrets.tf`, `sa.tf`, `api.tf`, `policy.tf`, ecc. 
 
-    - **setup/**: Contiene la configurazione iniziale delle risorse cloud, inclusi credenziali, autorizzazioni, variabili e politiche di sicurezza. Utilizza file `*.tf` per definire queste risorse in Terraform.
+### Directory `bootstrap/`
 
-3. **bootstrap/**: Directory responsabile della configurazione iniziale per diversi ambienti (prod e test). Ogni sotto-directory contiene file `main.tf` per definire e avviare le risorse necessarie per ciascun ambiente.
+Questa directory contiene i file di bootstrap per i diversi ambienti.
 
-4. **environments/**: Contiene specifiche configurazioni per differenti ambienti (produzione e test). Ogni sotto-directory include file per definire variabili e backend per le configurazioni Terraform specifiche per l'ambiente.
+- **`prod/`** e **`test/`**: Directory dedicate alla configurazione di base dell'infrastruttura per gli ambienti di produzione e test, rispettivamente. Ognuna contiene un file `main.tf` per la definizione delle risorse.
 
-## Considerazioni generali
+### Directory `environments/`
 
-- **Modularità**: La struttura del progetto è altamente modulare, facilitando la manutenibilità e la scalabilità. Ogni modulo ha una chiara responsabilità, suddivisa in diverse cartelle a seconda della loro funzionalità.
+Organizza le configurazioni per i vari ambienti.
 
-- **Separazione delle preoccupazioni**: I file sono organizzati in modo da separare chiaramente la logica di storage dalla logica di orchestrazione e dalle funzioni di calcolo.
+- **`prod/`** e **`test/`**: Contengono i file necessari per definire le risorse specifiche per ciascun ambiente, come variabili e backend per lo stato dell'infrastruttura.
+  - **File**: `main.tf`, `variables.tf`, `backend.tf` per gestire le risorse e le configurazioni specifiche per la produzione e il test.
 
-- **Utilizzo di Terraform**: È evidente che il progetto utilizza Terraform per la definizione e la gestione dell'infrastruttura, come dimostrato dalla presenza di file `*.tf`.
+## Conclusione
 
-- **Diritti di accesso e sicurezza**: I file all'interno della cartella `setup/` iniziano a toccare aspetti di sicurezza e credenziali, che sono fondamentali nel contesto di un progetto cloud.
-
-Questa struttura rende il progetto ben organizzato e preparato per crescenti complessità nel tempo, facilitando l'aggiunta di nuove funzionalità e miglioramenti continui.
+Questa struttura organizza il progetto in maniera logica, separando chiaramente le diverse responsabilità. Ogni directory ha uno scopo specifico e aiuta a mantenere il codice modulare e facile da gestire. Utilizzando questa architettura, è possibile garantire una chiara separazione delle preoccupazioni, facilitando sia lo sviluppo che il mantenimento del progetto nel tempo.
