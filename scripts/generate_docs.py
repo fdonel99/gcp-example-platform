@@ -121,32 +121,32 @@ def run_agent(agent_name, system_prompt, input_text, filename, title, current_st
     current_state[state_key] = current_hash
     return current_state
 
-# ==========================================
-# 5. Esecuzione
-# ==========================================
 if __name__ == "__main__":
-    state = load_state()
-    
-    # Agente 1: Struttura (Usa 4o-mini)
-    prompt_struttura = "Sei un DevOps Architect. Spiega in un documento Markdown la struttura logica e l'organizzazione delle directory di questo progetto. Non parlare di CI/CD qui."
-    state = run_agent("Agente 1 (Struttura)", prompt_struttura, get_project_structure(), "struttura_logica.md", "Struttura Logica del Progetto", state, "hash_struttura", MODEL_MINI)
-    
-    # Agente 2: Moduli Terraform (Usa 4o)
-    prompt_moduli = "Sei un Cloud Engineer. Analizza il codice Terraform e il codice Python (Cloud Functions) fornito. Scrivi un documento Markdown operativo spiegando: 1) Per ogni modulo Terraform, il ruolo di business e le risorse create. 2) Per ogni Cloud Function, la logica applicativa e cosa fa il codice Python al suo interno. Non incollare mai il codice sorgente nel documento finale."
-    state = run_agent(
-        "Agente 2 (Moduli e Funzioni)", 
-        prompt_moduli, 
-        get_infra_and_functions_code(),
-        "ruolo_moduli.md", 
-        "Ruolo dei Moduli e Logica Funzioni", 
-        state, 
-        "hash_moduli", 
-        MODEL_PRO
-    )
-    
-    # Agente 3: Pipeline CI/CD (Usa 4o-mini)
-    prompt_cicd = "Sei un esperto di automazione. Analizza questi workflow GitHub Actions. Spiega in Markdown l'impostazione del flusso CI/CD, la divisione degli ambienti (es. branch main e test), quali eventi (push) scatenano le action e in che modo queste eseguono il deploy tramite Terraform."
-    state = run_agent("Agente 3 (CI/CD)", prompt_cicd, get_cicd_code(), "flusso_cicd.md", "Impostazione Flusso CI/CD", state, "hash_cicd", MODEL_MINI)
-    
-    save_state(state)
-    print("Elaborazione completata!")
+        state = load_state()
+        
+        # Agente 1: Struttura (Usa 4o-mini)
+        prompt_struttura = """Sei un Lead DevOps Architect. Spiega in un documento Markdown la struttura logica e l'organizzazione delle directory di questo progetto. 
+        REGOLE FONDAMENTALI: 
+        1. Usa un tono tecnico, assertivo, deciso e autorevole. 
+        2. NON usare MAI termini dubbiosi come 'probabilmente', 'presumibilmente', 'sembra che', 'potrebbe'. Descrivi a cosa serve un file deducendolo dal nome con assoluta certezza.
+        3. Non parlare di CI/CD qui."""
+        state = run_agent("Agente 1 (Struttura)", prompt_struttura, get_project_structure(), "struttura_logica.md", "Struttura Logica del Progetto", state, "hash_struttura", MODEL_MINI)
+        
+        # Agente 2: Moduli Terraform e Cloud Functions (Usa 4o)
+        prompt_moduli = """Sei un Senior Cloud Engineer. Analizza il codice Terraform e il codice Python (Cloud Functions) fornito. Scrivi un documento Markdown operativo.
+        REGOLE FONDAMENTALI:
+        1. Usa un tono tecnico, assertivo e definitivo. Niente supposizioni.
+        2. Spiega per ogni modulo Terraform il ruolo di business e le risorse create. 
+        3. Spiega per ogni Cloud Function la logica applicativa.
+        4. Non incollare mai il codice sorgente nel documento finale."""
+        state = run_agent("Agente 2 (Moduli e Funzioni)", prompt_moduli, get_infra_and_functions_code(), "ruolo_moduli.md", "Ruolo dei Moduli e Logica Funzioni", state, "hash_moduli", MODEL_PRO)
+        
+        # Agente 3: Pipeline CI/CD (Usa 4o-mini)
+        prompt_cicd = """Sei un esperto di automazione DevOps. Analizza questi workflow GitHub Actions. Spiega in Markdown l'impostazione del flusso CI/CD, la divisione degli ambienti, gli eventi di trigger e il deploy.
+        REGOLE FONDAMENTALI:
+        1. Sii diretto e preciso. Non usare termini come 'probabilmente' o 'forse'. 
+        2. Elenca in modo chiaro come le action eseguono il deploy tramite Terraform."""
+        state = run_agent("Agente 3 (CI/CD)", prompt_cicd, get_cicd_code(), "flusso_cicd.md", "Impostazione Flusso CI/CD", state, "hash_cicd", MODEL_MINI)
+        
+        save_state(state)
+        print("Elaborazione completata!")
