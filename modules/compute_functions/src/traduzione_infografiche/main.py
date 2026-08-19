@@ -1,6 +1,5 @@
 import os
 import sys
-import json
 import copy
 from datetime import datetime
 import functions_framework
@@ -207,13 +206,7 @@ def process_infographic_trigger(cloud_event):
         percorso_base_output = f"elaborato_{current_date_str}"
         content_type = f'image/{formato_img.lower()}'
 
-        output_image_name_it = f"{percorso_base_output}/{nome_base}_it{estensione}"
-        source_bucket.copy_blob(source_blob, destination_bucket, new_name=output_image_name_it)
-        
-        json_blob = destination_bucket.blob(f"{percorso_base_output}/{nome_base}_metadati.json")
-        metadati_finali = {"blocchi_struttura": blocchi_validi, "traduzioni_base": traduzioni_base}
-        json_blob.upload_from_string(data=json.dumps(metadati_finali, indent=2, ensure_ascii=False), content_type='application/json')
-
+        # SALVATAGGIO SOLO DELLE IMMAGINI TRADOTTE
         for lang in lingue_richieste:
             img_tradotta_path = f"/tmp/infografica_{lang}.jpg"
             if os.path.exists(img_tradotta_path):
@@ -228,12 +221,5 @@ def process_infographic_trigger(cloud_event):
         logger.log(f"\n❌ ERRORE CRITICO: {e}")
         raise e
     finally:
-        sys.stdout = original_stdout 
-        if destination_bucket and nome_base: 
-            try:
-                testo_log = logger.get_testo_completo()
-                percorso_log = f"elaborato_{datetime.now().strftime('%Y-%m-%d')}/{nome_base}_debug.txt"
-                log_blob = destination_bucket.blob(percorso_log)
-                log_blob.upload_from_string(testo_log, content_type='text/plain')
-            except Exception:
-                pass
+        # Ripristina l'output standard
+        sys.stdout = original_stdout

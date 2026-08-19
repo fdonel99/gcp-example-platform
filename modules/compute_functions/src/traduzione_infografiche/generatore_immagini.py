@@ -66,8 +66,9 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
     # --- 2. CALCOLO DELLA DIMENSIONE E IMPAGINAZIONE ---
     moltiplicatore_altezza = 1.35 if ruolo == "Titolo" else 1.15
     
-    # ELASTICITÀ
-    larghezza_utile = box_width * 1.10
+    # FIX SPILL-OVER: I Titoli non possono espandersi (2%), i testi normali sì (10%)
+    elasticita = 1.02 if ruolo == "Titolo" else 1.10
+    larghezza_utile = box_width * elasticita
     incremento_w = larghezza_utile - box_width
     
     if allineamento == "centro":
@@ -164,6 +165,7 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
             current_x = inizio_x 
         
         for w in line["words"]:
+            # Rimuoviamo ombre: stampa semplicemente il testo in tinta unita
             draw.text((current_x, current_y), w["text"], font=w["f"], fill=color)
             current_x += w["w_space"]
             
@@ -210,6 +212,10 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
             colore_testo = (0,0,0)
             trovato_colore = False
 
+            # Otteniamo SUBITO il ruolo per usarlo durante la cancellazione
+            ruolo_calc = mappa_ruoli.get(i, "Sconosciuto")
+            allin = mappa_allineamenti.get(i, "sinistra")
+
             for id_orig in ids_originali:
                 blocco_ocr = next((b for b in dati_strutturati if b["id_blocco"] == id_orig), None)
                 if blocco_ocr:
@@ -234,7 +240,7 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
             
             colore_sfondo = calcola_sfondo(img, min_x, min_y, max_x, max_y)
             
-            # --- FASE 1: CANCELLAZIONE DI PRECISIONE ESTESA ---
+            # --- FASE 1: CANCELLAZIONE DINAMICA E ANTI-OMBRA ---
             for id_orig in ids_originali:
                 blocco_ocr = next((b for b in dati_strutturati if b["id_blocco"] == id_orig), None)
                 if blocco_ocr:
@@ -244,13 +250,24 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
                             
                         pxs = [v["x"] for v in p["vertici"]]
                         pys = [v["y"] for v in p["vertici"]]
+                        
                         if pxs and pys:
-                            # FIX ARTEFATTI: Espansione asimmetrica per divorare lettere tagliate o punteggiatura
-                            # -6px a sinistra, +12px a destra
-                            draw.rectangle([min(pxs)-6, min(pys)-4, max(pxs)+12, max(pys)+4], fill=colore_sfondo)
+                            word_h = max(pys) - min(pys)
+                            
+                            # Padding standard per testi normali
+                            p_left = 6
+                            p_top = 4
+                            p_right = 12
+                            p_bottom = 4
+                            
+                            # Se è un Titolo, applichiamo la spugna anti-ombra! (Proporzionale all'altezza della parola)
+                            if ruolo_calc == "Titolo":
+                                p_right = max(15, int(word_h * 0.30))  # Cerca ombre fino al 30% a destra
+                                p_bottom = max(10, int(word_h * 0.25)) # Cerca ombre fino al 25% in basso
+                                p_top = 8
+                                p_left = 8
 
-            allin = mappa_allineamenti.get(i, "sinistra")
-            ruolo_calc = mappa_ruoli.get(i, "Sconosciuto")
+                            draw.rectangle([min(pxs)-p_left, min(pys)-p_top, max(pxs)+p_right, max(pys)+p_bottom], fill=colore_sfondo)
 
             # --- FASE 2: OFFSET DELL'IA SULLE NUOVE COORDINATE ---
             if idx_str in offset_correttivi:
