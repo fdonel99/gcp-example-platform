@@ -65,14 +65,24 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
 
     # --- 2. CALCOLO DELLA DIMENSIONE E IMPAGINAZIONE ---
     moltiplicatore_altezza = 1.35 if ruolo == "Titolo" else 1.15
-    larghezza_utile = box_width
+    
+    # ELASTICITÀ: Diamo il 10% di tolleranza in più alla larghezza per evitare 
+    # ritorni a capo "spezzati" nelle lingue più lunghe dell'italiano.
+    larghezza_utile = box_width * 1.10
+    incremento_w = larghezza_utile - box_width
+    
+    # Ri-centriamo matematicamente il box rispetto al nuovo spazio
+    if allineamento == "centro":
+        box_x_reale = box_x - (incremento_w / 2)
+    elif allineamento == "destra":
+        box_x_reale = box_x - incremento_w
+    else: # sinistra
+        box_x_reale = box_x
     
     best_lines = []
     best_total_h = 0
     best_line_h = 0
     
-    # Variabili di sicurezza dichiarate FUORI dal ciclo
-    # (prevengono l'errore UnboundLocalError se c'è sempre overflow)
     fallback_lines = []
     fallback_total_h = 0
     fallback_line_h = 0
@@ -120,8 +130,6 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
                 line_w_exact = current_w - current_line[-1]["w_space"] + current_line[-1]["w"]
                 lines.append({"words": current_line, "w": line_w_exact})
                 
-        # Calcoliamo sempre le metriche, anche in caso di overflow!
-        # Così avremo un dato valido in caso di fallback forzato a fine ciclo
         line_height = size * 1.15
         total_h = len(lines) * line_height
         
@@ -136,7 +144,6 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
             best_lines = lines; best_total_h = total_h; best_line_h = line_height
             break
             
-    # Se ha superato il ciclo senza mai trovare la dimensione perfetta, usa l'ultimo calcolo (fallback)
     if not best_lines:
         best_lines = fallback_lines
         best_total_h = fallback_total_h
@@ -149,7 +156,8 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
             current_y += best_line_h
             continue
         
-        inizio_x = box_x
+        # Usiamo il box calibrato con l'elasticità
+        inizio_x = box_x_reale
         
         if allineamento == "centro":
             current_x = inizio_x + (larghezza_utile - line["w"]) / 2
@@ -205,16 +213,13 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
             colore_testo = (0,0,0)
             trovato_colore = False
 
-            # --- MAGIA MATEMATICA: CALCOLO DELLE COORDINATE ESCLUDENDO LO SCUDO ---
             for id_orig in ids_originali:
                 blocco_ocr = next((b for b in dati_strutturati if b["id_blocco"] == id_orig), None)
                 if blocco_ocr:
                     for p in blocco_ocr["parole"]:
-                        # Se la parola è nello scudo, NON usare le sue coordinate per il calcolo!
                         if p["testo"].lower() in parole_salve_lower:
                             continue
                             
-                        # Troviamo il colore solo dalle parole non protette
                         if not trovato_colore:
                             rgb = p.get("colore_rgb", {"r":0, "g":0, "b":0})
                             colore_testo = (rgb["r"], rgb["g"], rgb["b"])
@@ -224,15 +229,12 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
                             tutti_x.append(v["x"])
                             tutti_y.append(v["y"])
                             
-            # Se tutte le parole del blocco erano protette, non c'è nulla da stampare
             if not tutti_x: continue
 
-            # Ora min_x è il punto esatto in cui iniziava il testo originale da sostituire!
             min_x, max_x = min(tutti_x), max(tutti_x)
             min_y, max_y = min(tutti_y), max(tutti_y)
             box_width, box_height = max_x - min_x, max_y - min_y
             
-            # Calcoliamo lo sfondo attorno alle sole parole da cancellare
             colore_sfondo = calcola_sfondo(img, min_x, min_y, max_x, max_y)
             
             # --- FASE 1: CANCELLAZIONE DI PRECISIONE ---
@@ -240,14 +242,14 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
                 blocco_ocr = next((b for b in dati_strutturati if b["id_blocco"] == id_orig), None)
                 if blocco_ocr:
                     for p in blocco_ocr["parole"]:
-                        # Non cancelliamo le parole scudate
                         if p["testo"].lower() in parole_salve_lower:
                             continue
                             
                         pxs = [v["x"] for v in p["vertici"]]
                         pys = [v["y"] for v in p["vertici"]]
                         if pxs and pys:
-                            draw.rectangle([min(pxs), min(pys)-2, max(pxs)+2, max(pys)+2], fill=colore_sfondo)
+                            # FIX LINEA BIANCA: Imbottitura aggressiva di 4px su tutti i lati!
+                            draw.rectangle([min(pxs)-4, min(pys)-4, max(pxs)+4, max(pys)+4], fill=colore_sfondo)
 
             allin = mappa_allineamenti.get(i, "sinistra")
             ruolo_calc = mappa_ruoli.get(i, "Sconosciuto")
