@@ -16,7 +16,6 @@ def calcola_sfondo(img, min_x, min_y, max_x, max_y):
     b = sorted([p[2] for p in punti])[len(punti)//2]
     return (r, g, b)
 
-# AGGIUNTO img_width e img_height NEI PARAMETRI
 def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, box_width, box_height, color, img_width, img_height, allineamento="sinistra", ruolo="Sconosciuto"):
     min_size = 12
     max_size = 120
@@ -65,10 +64,20 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
         struttura_paragrafi.append(words_info)
 
     # --- 2. CALCOLO DELLA DIMENSIONE E IMPAGINAZIONE ---
-    # FIX APE: Restringiamo l'altezza massima consentita per i paragrafi (da 1.15 a 1.02)
-    moltiplicatore_altezza = 1.30 if ruolo == "Titolo" else 1.02
     
-    elasticita = 1.02 if ruolo == "Titolo" else 1.10
+    # FIX ALTEZZA: Permettiamo ai testi di espandersi in verticale
+    moltiplicatore_altezza = 1.30 if ruolo == "Titolo" else 1.25
+    
+    # FIX LARGHEZZA TRAMITE AGENTE: Gestione differenziata in base al ruolo esplicito
+    if ruolo == "Titolo":
+        elasticita = 1.50  # I titoli possono allargarsi molto per non spezzarsi su troppe righe
+    elif ruolo == "Callout":
+        elasticita = 1.15  # I piccoli testi sotto le icone hanno un leggero margine extra
+    elif ruolo == "Paragrafo":
+        elasticita = 1.02  # I testi lunghi (identificati dall'Agente) restano bloccati per andare a capo
+    else:
+        elasticita = 1.10  # Fallback generico
+        
     larghezza_utile = box_width * elasticita
     incremento_w = larghezza_utile - box_width
     
@@ -79,10 +88,22 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
     else: 
         box_x_reale = box_x
         
-    # FIX FRANCESE TAGLIATO: Evitiamo che la larghezza utile sbordi fuori dalla foto
-    margine_sicurezza = 20 # 20 pixel di distanza dal bordo fisico dell'immagine
-    if box_x_reale + larghezza_utile > img_width - margine_sicurezza:
-        larghezza_utile = (img_width - margine_sicurezza) - box_x_reale
+    # FIX: Gestione corretta dei margini e centrature estreme
+    margine_sicurezza = 30 # Aumentato per non far sbattere i testi
+    
+    if allineamento == "centro":
+        if box_x_reale < margine_sicurezza:
+            # Ribilancia da ambo le parti se sbatte a sinistra
+            diff = margine_sicurezza - box_x_reale
+            box_x_reale = margine_sicurezza
+            larghezza_utile -= (diff * 2) 
+    elif allineamento == "destra":
+        if box_x_reale < margine_sicurezza:
+            box_x_reale = margine_sicurezza
+            larghezza_utile = (box_x + box_width) - margine_sicurezza
+    else: # sinistra
+        if box_x_reale + larghezza_utile > img_width - margine_sicurezza:
+            larghezza_utile = (img_width - margine_sicurezza) - box_x_reale
     
     best_lines = []
     best_total_h = 0
@@ -241,7 +262,20 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
             min_x, max_x = min(tutti_x), max(tutti_x)
             min_y, max_y = min(tutti_y), max(tutti_y)
             box_width, box_height = max_x - min_x, max_y - min_y
+
+            # --- FIX: OVERRIDE INTELLIGENTI ---
+            # 1. Centratura dei Titoli (se sono fisicamente al centro della foto)
+            box_center_x = min_x + (box_width / 2)
+            centro_immagine = img.width / 2
             
+            if ruolo_calc == "Titolo" and abs(box_center_x - centro_immagine) < (img.width * 0.15):
+                allin = "centro"
+            
+            # 2. Centratura fissa dei Callout (per mantenerli allineati sotto le icone)
+            # Nota: I "Paragrafi" rimarranno con l'allineamento deciso dall'Agente
+            if ruolo_calc == "Callout":
+                allin = "centro"
+
             colore_sfondo = calcola_sfondo(img, min_x, min_y, max_x, max_y)
             
             # --- FASE 1: CANCELLAZIONE DINAMICA E ANTI-OMBRA ---
@@ -284,7 +318,7 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
                 
                 if pixel_spostamento_x > 0:
                     box_width -= pixel_spostamento_x 
-            
+        
             disegna_testo_markdown(
                 draw=draw, 
                 testo_md=testo_tradotto_md, 
@@ -295,8 +329,8 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
                 box_width=box_width, 
                 box_height=box_height, 
                 color=colore_testo,
-                img_width=img.width,     # <-- Parametro Limite Destro 
-                img_height=img.height,   # <-- Passato per sicurezza
+                img_width=img.width,     
+                img_height=img.height,   
                 allineamento=allin,
                 ruolo=ruolo_calc
             )
