@@ -16,7 +16,8 @@ def calcola_sfondo(img, min_x, min_y, max_x, max_y):
     b = sorted([p[2] for p in punti])[len(punti)//2]
     return (r, g, b)
 
-def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, box_width, box_height, color, allineamento="sinistra", ruolo="Sconosciuto"):
+# AGGIUNTO img_width e img_height NEI PARAMETRI
+def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, box_width, box_height, color, img_width, img_height, allineamento="sinistra", ruolo="Sconosciuto"):
     min_size = 12
     max_size = 120
     
@@ -64,9 +65,9 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
         struttura_paragrafi.append(words_info)
 
     # --- 2. CALCOLO DELLA DIMENSIONE E IMPAGINAZIONE ---
-    moltiplicatore_altezza = 1.35 if ruolo == "Titolo" else 1.15
+    # FIX APE: Restringiamo l'altezza massima consentita per i paragrafi (da 1.15 a 1.02)
+    moltiplicatore_altezza = 1.30 if ruolo == "Titolo" else 1.02
     
-    # FIX SPILL-OVER: I Titoli non possono espandersi (2%), i testi normali sì (10%)
     elasticita = 1.02 if ruolo == "Titolo" else 1.10
     larghezza_utile = box_width * elasticita
     incremento_w = larghezza_utile - box_width
@@ -77,6 +78,11 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
         box_x_reale = box_x - incremento_w
     else: 
         box_x_reale = box_x
+        
+    # FIX FRANCESE TAGLIATO: Evitiamo che la larghezza utile sbordi fuori dalla foto
+    margine_sicurezza = 20 # 20 pixel di distanza dal bordo fisico dell'immagine
+    if box_x_reale + larghezza_utile > img_width - margine_sicurezza:
+        larghezza_utile = (img_width - margine_sicurezza) - box_x_reale
     
     best_lines = []
     best_total_h = 0
@@ -165,13 +171,12 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
             current_x = inizio_x 
         
         for w in line["words"]:
-            # Rimuoviamo ombre: stampa semplicemente il testo in tinta unita
             draw.text((current_x, current_y), w["text"], font=w["f"], fill=color)
             current_x += w["w_space"]
             
         current_y += best_line_h
 
-def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni, mappa_allineamenti, mappa_ruoli, offset_correttivi=None, parole_da_preservare=None):
+def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni, mappa_allineamenti, mappa_ruoli, offset_correttivi=None, parole_da_preservare=None, nome_base="infografica"):
     print("\n🎨 Avvio motore di rendering (Geometria Intelligente con Scudo)...")
     if offset_correttivi is None: offset_correttivi = {}
     if parole_da_preservare is None: parole_da_preservare = {}
@@ -212,7 +217,6 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
             colore_testo = (0,0,0)
             trovato_colore = False
 
-            # Otteniamo SUBITO il ruolo per usarlo durante la cancellazione
             ruolo_calc = mappa_ruoli.get(i, "Sconosciuto")
             allin = mappa_allineamenti.get(i, "sinistra")
 
@@ -254,16 +258,14 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
                         if pxs and pys:
                             word_h = max(pys) - min(pys)
                             
-                            # Padding standard per testi normali
                             p_left = 6
                             p_top = 4
                             p_right = 12
                             p_bottom = 4
                             
-                            # Se è un Titolo, applichiamo la spugna anti-ombra! (Proporzionale all'altezza della parola)
                             if ruolo_calc == "Titolo":
-                                p_right = max(15, int(word_h * 0.30))  # Cerca ombre fino al 30% a destra
-                                p_bottom = max(10, int(word_h * 0.25)) # Cerca ombre fino al 25% in basso
+                                p_right = max(15, int(word_h * 0.30))  
+                                p_bottom = max(10, int(word_h * 0.25)) 
                                 p_top = 8
                                 p_left = 8
 
@@ -293,10 +295,12 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
                 box_width=box_width, 
                 box_height=box_height, 
                 color=colore_testo,
+                img_width=img.width,     # <-- Parametro Limite Destro 
+                img_height=img.height,   # <-- Passato per sicurezza
                 allineamento=allin,
                 ruolo=ruolo_calc
             )
             
-        nome_file = f"infografica_{lang}.jpg"
+        nome_file = f"{nome_base}_{lang}.jpg"
         img.save(nome_file, quality=95)
         print(f"✅ Salvata: {nome_file}")

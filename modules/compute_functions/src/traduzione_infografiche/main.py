@@ -115,7 +115,8 @@ def process_infographic_trigger(cloud_event):
             blocchi_logici=blocchi_validi, 
             traduzioni=traduzioni_base,
             mappa_allineamenti=allin,
-            mappa_ruoli=ruoli
+            mappa_ruoli=ruoli,
+            nome_base=nome_base
         )
         logger.log("\n🎉 FASE DI RENDERING BASE COMPLETATA!")
 
@@ -198,7 +199,8 @@ def process_infographic_trigger(cloud_event):
                     mappa_allineamenti=allin_lang,
                     mappa_ruoli=ruoli_lang,
                     offset_correttivi=offset_attivi_lang,
-                    parole_da_preservare=parole_protette_lang
+                    parole_da_preservare=parole_protette_lang,
+                    nome_base=nome_base
                 )
 
         logger.log("\n=== AVVIO CARICAMENTO SU BUCKET ===")
