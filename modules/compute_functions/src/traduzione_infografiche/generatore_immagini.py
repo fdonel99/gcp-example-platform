@@ -66,17 +66,15 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
     # --- 2. CALCOLO DELLA DIMENSIONE E IMPAGINAZIONE ---
     moltiplicatore_altezza = 1.35 if ruolo == "Titolo" else 1.15
     
-    # ELASTICITÀ: Diamo il 10% di tolleranza in più alla larghezza per evitare 
-    # ritorni a capo "spezzati" nelle lingue più lunghe dell'italiano.
+    # ELASTICITÀ
     larghezza_utile = box_width * 1.10
     incremento_w = larghezza_utile - box_width
     
-    # Ri-centriamo matematicamente il box rispetto al nuovo spazio
     if allineamento == "centro":
         box_x_reale = box_x - (incremento_w / 2)
     elif allineamento == "destra":
         box_x_reale = box_x - incremento_w
-    else: # sinistra
+    else: 
         box_x_reale = box_x
     
     best_lines = []
@@ -156,7 +154,6 @@ def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, bo
             current_y += best_line_h
             continue
         
-        # Usiamo il box calibrato con l'elasticità
         inizio_x = box_x_reale
         
         if allineamento == "centro":
@@ -237,7 +234,7 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
             
             colore_sfondo = calcola_sfondo(img, min_x, min_y, max_x, max_y)
             
-            # --- FASE 1: CANCELLAZIONE DI PRECISIONE ---
+            # --- FASE 1: CANCELLAZIONE DI PRECISIONE ESTESA ---
             for id_orig in ids_originali:
                 blocco_ocr = next((b for b in dati_strutturati if b["id_blocco"] == id_orig), None)
                 if blocco_ocr:
@@ -248,8 +245,9 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
                         pxs = [v["x"] for v in p["vertici"]]
                         pys = [v["y"] for v in p["vertici"]]
                         if pxs and pys:
-                            # FIX LINEA BIANCA: Imbottitura aggressiva di 4px su tutti i lati!
-                            draw.rectangle([min(pxs)-4, min(pys)-4, max(pxs)+4, max(pys)+4], fill=colore_sfondo)
+                            # FIX ARTEFATTI: Espansione asimmetrica per divorare lettere tagliate o punteggiatura
+                            # -6px a sinistra, +12px a destra
+                            draw.rectangle([min(pxs)-6, min(pys)-4, max(pxs)+12, max(pys)+4], fill=colore_sfondo)
 
             allin = mappa_allineamenti.get(i, "sinistra")
             ruolo_calc = mappa_ruoli.get(i, "Sconosciuto")
