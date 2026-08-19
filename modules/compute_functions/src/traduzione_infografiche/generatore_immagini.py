@@ -301,6 +301,6 @@ def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni
                 ruolo=ruolo_calc
             )
             
-        nome_file = f"{nome_base}_{lang}.jpg"
+        nome_file = f"/tmp/{nome_base}_{lang}.jpg"
         img.save(nome_file, quality=95)
         print(f"✅ Salvata: {nome_file}")

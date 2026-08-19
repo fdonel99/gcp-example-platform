@@ -41,16 +41,11 @@ resource "google_cloudfunctions2_function" "function_traduzione_infografiche" {
   }
 
   service_config {
-    max_instance_count               = 5
-    # NOTA SULLA CONCORRENZA: L'elaborazione immagini con Pillow e OpenCV consuma molta RAM. 
-    # Se noti errori OOM (Out Of Memory) quando carichi tante immagini insieme, 
-    # valuta di abbassare questo valore (es. a 1 o 5).
-    max_instance_request_concurrency = 80 
-    
-    available_memory                 = "2G" 
+    max_instance_count               = 10  
+    max_instance_request_concurrency = 1   
+    available_memory                 = "2G"
     available_cpu                    = "1" 
-    timeout_seconds                  = 540 # 9 Minuti, ideali per i cicli di QA dell'Intelligenza Artificiale
-    
+    timeout_seconds                  = 540 
     service_account_email            = var.cloud_worker_sa_email
     
     environment_variables = {

@@ -1,227 +1,306 @@
 import os
-import sys
-import copy
-from datetime import datetime
-import functions_framework
-from google.cloud import storage
+from PIL import Image, ImageDraw, ImageFont
 
-# --- IMPORT DEGLI AGENTI ---
-from estrai_testo_e_coordinate import estrai_testo_e_coordinate
-from agente_filtro import analizza_e_filtra
-from agente_traduttore import traduci_testi
-from generatore_immagini import genera_infografiche
-from agente_reviewer import agente_reviewer 
-from agente_corrector import agente_corrector 
+def calcola_sfondo(img, min_x, min_y, max_x, max_y):
+    pad = 5; punti = []; w, h = img.size
+    for x in range(max(0, min_x), min(w, max_x), max(1, (max_x - min_x)//10)):
+        if min_y - pad > 0: punti.append(img.getpixel((x, min_y - pad)))
+        if max_y + pad < h: punti.append(img.getpixel((x, max_y + pad)))
+    for y in range(max(0, min_y), min(h, max_y), max(1, (max_y - min_y)//10)):
+        if min_x - pad > 0: punti.append(img.getpixel((min_x - pad, y)))
+        if max_x + pad < w: punti.append(img.getpixel((max_x + pad, y)))
+        
+    if not punti: return (255, 255, 255)
+    r = sorted([p[0] for p in punti])[len(punti)//2]
+    g = sorted([p[1] for p in punti])[len(punti)//2]
+    b = sorted([p[2] for p in punti])[len(punti)//2]
+    return (r, g, b)
 
-# ==========================================
-# IMPOSTAZIONI AMBIENTE (DA TERRAFORM)
-# ==========================================
-PROJECT_ID = os.environ.get("PROJECT_ID")
-OUTPUT_BUCKET_NAME = os.environ.get("OUTPUT_BUCKET_NAME")
-REGION = os.environ.get("REGION", "global")
-
-storage_client = storage.Client(project=PROJECT_ID)
-
-# ==========================================
-# GESTORE LOG PER IL BUCKET E CATTURA PRINT
-# ==========================================
-class BucketLogger:
-    def __init__(self):
-        self.logs = []
+# AGGIUNTO img_width e img_height NEI PARAMETRI
+def disegna_testo_markdown(draw, testo_md, path_reg, path_bold, box_x, box_y, box_width, box_height, color, img_width, img_height, allineamento="sinistra", ruolo="Sconosciuto"):
+    min_size = 12
+    max_size = 120
     
-    def log(self, messaggio):
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        riga = f"[{timestamp}] {messaggio}"
-        sys.__stdout__.write(riga + "\n")
-        sys.__stdout__.flush()
-        self.logs.append(riga)
-        
-    def get_testo_completo(self):
-        return "\n".join(self.logs)
-
-class PrintCapture:
-    """Intercetta tutti i print standard e li dirotta nel BucketLogger."""
-    def __init__(self, logger):
-        self.logger = logger
-    def write(self, message):
-        if message.strip():
-            self.logger.log(message.strip())
-    def flush(self):
-        pass
-
-def processa_dati_filtro(blocchi_validi):
-    testi_md = {}
-    m_ruoli = {}
-    m_allin = {}
-    for i, b_valido in enumerate(blocchi_validi):
-        testo_md = b_valido.get("testo_markdown", "")
-        testi_md[i] = testo_md
-        m_ruoli[i] = b_valido.get("ruolo", "Sconosciuto")
-        m_allin[i] = b_valido.get("allineamento", "sinistra")
-    return testi_md, m_ruoli, m_allin
-
-# ==========================================
-# CLOUD FUNCTION ENTRY POINT
-# ==========================================
-@functions_framework.cloud_event
-def process_infographic_trigger(cloud_event):
-    data = cloud_event.data
-    bucket_name = data["bucket"]
-    file_name = data["name"]
-
-    if file_name.endswith("/"): return
-    if not file_name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")): return
-
-    logger = BucketLogger()
-    original_stdout = sys.stdout
-    sys.stdout = PrintCapture(logger)
-
-    logger.log(f"=== INIZIO ELABORAZIONE MULTI-AGENTE: {file_name} ===")
-
-    # Cloud Function RAM Working Directory
-    os.chdir("/tmp")
-
-    destination_bucket = None
-    nome_base = ""
-
-    try:
-        nome_base, estensione = os.path.splitext(file_name)
-        formato_img = "PNG" if estensione.lower() == ".png" else "JPEG"
-        
-        destination_bucket = storage_client.bucket(OUTPUT_BUCKET_NAME)
-        source_bucket = storage_client.bucket(bucket_name)
-        source_blob = source_bucket.blob(file_name)
-        
-        percorso_immagine = f"/tmp/originale_{nome_base}{estensione}"
-        source_blob.download_to_filename(percorso_immagine)
-        
-        dati_strutturati = estrai_testo_e_coordinate(percorso_immagine)
-        
-        risultato_filtro = analizza_e_filtra(percorso_immagine, dati_strutturati)
-        blocchi_validi = risultato_filtro.get("blocchi_validi", [])
-        testi_md, ruoli, allin = processa_dati_filtro(blocchi_validi)
-
-        if not testi_md:
-            logger.log("⚠️ Nessun testo trovato da tradurre. Operazione conclusa.")
-            return
-
-        lingue_richieste = ["en", "fr", "de", "es", "nl"]
-        risultato_traduzione = traduci_testi(testi_md, ruoli, lingue_richieste)
-        traduzioni_base = risultato_traduzione.get("traduzioni", [])
-        
-        genera_infografiche(
-            image_path=percorso_immagine, 
-            dati_strutturati=dati_strutturati, 
-            blocchi_logici=blocchi_validi, 
-            traduzioni=traduzioni_base,
-            mappa_allineamenti=allin,
-            mappa_ruoli=ruoli,
-            nome_base=nome_base
-        )
-        logger.log("\n🎉 FASE DI RENDERING BASE COMPLETATA!")
-
-        logger.log("\n🔎 AVVIO FASE DI CONTROLLO QUALITÀ (QA)...")
-        
-        for lang in lingue_richieste:
-            img_tradotta_path = f"/tmp/infografica_{lang}.jpg"
-            if not os.path.exists(img_tradotta_path): continue
+    # --- 1. PARSING DEL MARKDOWN OTTIMIZZATO ---
+    paragrafi = testo_md.split('\n')
+    struttura_paragrafi = []
+    
+    bold_mode_global = False  
+    
+    for paragrafo in paragrafi:
+        raw_words = paragrafo.split()
+        if not raw_words:
+            struttura_paragrafi.append([]) 
+            continue
             
-            trad_attive_lang = copy.deepcopy(traduzioni_base)
-            blocchi_validi_lang = copy.deepcopy(blocchi_validi)
-            allin_lang = copy.deepcopy(allin)
-            ruoli_lang = copy.deepcopy(ruoli)
+        words = []
+        for rw in raw_words:
+            if rw.replace('**', '') in [':', ';', '!', '?', '-', '»', '”'] and words:
+                words[-1] = words[-1] + " " + rw
+            else:
+                words.append(rw)
+
+        words_info = []
+        for w in words:
+            clean_w = w
             
-            offset_attivi_lang = {}
-            parole_protette_lang = {}
+            if clean_w.startswith('**') and clean_w.endswith('**') and len(clean_w) >= 4:
+                words_info.append({"text": clean_w[2:-2], "bold": True})
+                continue
                 
-            max_tentativi = 3
-            for tentativo in range(1, max_tentativi + 1):
-                logger.log(f"\n--- [QA] Vaglio della lingua: {lang} (Tentativo {tentativo}/{max_tentativi}) ---")
+            if clean_w.startswith('**'):
+                bold_mode_global = True
+                clean_w = clean_w[2:]
                 
-                esito_qa = agente_reviewer(percorso_immagine, img_tradotta_path, lang)
+            end_bold = False
+            if '**' in clean_w:
+                end_bold = True
+                clean_w = clean_w.replace('**', '')
                 
-                if esito_qa.get("status") == "ok":
-                    break 
-                    
-                motivo_ko = esito_qa.get("ragionamento", "Difetto visivo/linguistico generico.")
+            words_info.append({"text": clean_w, "bold": bold_mode_global})
+            
+            if end_bold: 
+                bold_mode_global = False
                 
-                if tentativo == max_tentativi:
-                    logger.log(f"⚠️ Raggiunto limite massimo per {lang}. L'immagine verrà caricata così com'è.")
+        struttura_paragrafi.append(words_info)
+
+    # --- 2. CALCOLO DELLA DIMENSIONE E IMPAGINAZIONE ---
+    # FIX APE: Restringiamo l'altezza massima consentita per i paragrafi (da 1.15 a 1.02)
+    moltiplicatore_altezza = 1.30 if ruolo == "Titolo" else 1.02
+    
+    elasticita = 1.02 if ruolo == "Titolo" else 1.10
+    larghezza_utile = box_width * elasticita
+    incremento_w = larghezza_utile - box_width
+    
+    if allineamento == "centro":
+        box_x_reale = box_x - (incremento_w / 2)
+    elif allineamento == "destra":
+        box_x_reale = box_x - incremento_w
+    else: 
+        box_x_reale = box_x
+        
+    # FIX FRANCESE TAGLIATO: Evitiamo che la larghezza utile sbordi fuori dalla foto
+    margine_sicurezza = 20 # 20 pixel di distanza dal bordo fisico dell'immagine
+    if box_x_reale + larghezza_utile > img_width - margine_sicurezza:
+        larghezza_utile = (img_width - margine_sicurezza) - box_x_reale
+    
+    best_lines = []
+    best_total_h = 0
+    best_line_h = 0
+    
+    fallback_lines = []
+    fallback_total_h = 0
+    fallback_line_h = 0
+        
+    for size in range(max_size, min_size - 1, -2):
+        if size > box_height * 0.90 and ruolo != "Titolo":
+            continue
+            
+        f_reg = ImageFont.truetype(path_reg, size)
+        f_bold = ImageFont.truetype(path_bold, size)
+        
+        lines = []
+        word_overflow = False
+        
+        for paragrafo_words in struttura_paragrafi:
+            if not paragrafo_words:
+                lines.append({"words": [], "w": 0})
+                continue
+                
+            current_line = []
+            current_w = 0
+            
+            for w_info in paragrafo_words:
+                f_active = f_bold if w_info["bold"] else f_reg
+                w_text = w_info["text"]
+                w_width = f_active.getlength(w_text)
+                w_width_with_space = f_active.getlength(w_text + " ")
+                
+                if w_width > larghezza_utile:
+                    word_overflow = True
                     break
-
-                correzione_ia = agente_corrector(percorso_immagine, img_tradotta_path, lang, motivo_ko, trad_attive_lang, dati_strutturati)
-                correzioni_lista = correzione_ia.get("correzioni", [])
+                    
+                if current_w + w_width > larghezza_utile and current_line:
+                    line_w_exact = current_w - current_line[-1]["w_space"] + current_line[-1]["w"]
+                    lines.append({"words": current_line, "w": line_w_exact})
+                    current_line = []
+                    current_w = 0
+                    
+                current_line.append({"text": w_text, "f": f_active, "w": w_width, "w_space": w_width_with_space})
+                current_w += w_width_with_space
                 
-                if not correzioni_lista:
-                    break 
-                    
-                for corr in correzioni_lista:
-                    id_logico = corr.get("id_blocco_logico")
-                    id_mancante = corr.get("id_ocr_mancante")
-                    n_testo = corr.get("nuovo_testo")
-                    
-                    target_i = -1
-                    
-                    if id_mancante is not None:
-                        target_i = len(blocchi_validi_lang)
-                        blocchi_validi_lang.append({"ids_originali": [id_mancante], "ruolo": "Callout", "allineamento": "sinistra"})
-                        allin_lang[target_i] = "sinistra"
-                        ruoli_lang[target_i] = "Callout"
-                        logger.log(f"🌟 RESUSCITATO Blocco OCR {id_mancante} nel nuovo indice logico {target_i}.")
-                    elif id_logico is not None:
-                        target_i = id_logico
+            if word_overflow: break
+                
+            if current_line:
+                line_w_exact = current_w - current_line[-1]["w_space"] + current_line[-1]["w"]
+                lines.append({"words": current_line, "w": line_w_exact})
+                
+        line_height = size * 1.15
+        total_h = len(lines) * line_height
+        
+        fallback_lines = lines
+        fallback_total_h = total_h
+        fallback_line_h = line_height
+        
+        if word_overflow: 
+            continue
+            
+        if total_h <= box_height * moltiplicatore_altezza:
+            best_lines = lines; best_total_h = total_h; best_line_h = line_height
+            break
+            
+    if not best_lines:
+        best_lines = fallback_lines
+        best_total_h = fallback_total_h
+        best_line_h = fallback_line_h
+        
+    current_y = box_y + (box_height - best_total_h) / 2
+    
+    for line in best_lines:
+        if not line["words"]: 
+            current_y += best_line_h
+            continue
+        
+        inizio_x = box_x_reale
+        
+        if allineamento == "centro":
+            current_x = inizio_x + (larghezza_utile - line["w"]) / 2
+        elif allineamento == "destra":
+            current_x = inizio_x + (larghezza_utile - line["w"])
+        else:
+            current_x = inizio_x 
+        
+        for w in line["words"]:
+            draw.text((current_x, current_y), w["text"], font=w["f"], fill=color)
+            current_x += w["w_space"]
+            
+        current_y += best_line_h
+
+def genera_infografiche(image_path, dati_strutturati, blocchi_logici, traduzioni, mappa_allineamenti, mappa_ruoli, offset_correttivi=None, parole_da_preservare=None, nome_base="infografica"):
+    print("\n🎨 Avvio motore di rendering (Geometria Intelligente con Scudo)...")
+    if offset_correttivi is None: offset_correttivi = {}
+    if parole_da_preservare is None: parole_da_preservare = {}
+        
+    dir_corrente = os.path.dirname(os.path.abspath(__file__))
+    FONT_REG = os.path.join(dir_corrente, "montserrat.ttf")
+    FONT_BOLD = os.path.join(dir_corrente, "montserrat-bold.ttf")
+    
+    lingue = set()
+    for trad in traduzioni:
+        for lang in trad.get("testi_tradotti", {}).keys():
+            lingue.add(lang)
+            
+    mappa_traduzioni = {lang: {} for lang in lingue}
+    for trad in traduzioni:
+        id_gruppo = trad.get("id_blocco")
+        for lang, text in trad.get("testi_tradotti", {}).items():
+            mappa_traduzioni[lang][id_gruppo] = text
+
+    for lang in lingue:
+        img = Image.open(image_path).convert("RGB")
+        draw = ImageDraw.Draw(img)
+        
+        for i, blocco_logico in enumerate(blocchi_logici):
+            testo_tradotto_md = mappa_traduzioni[lang].get(i, "")
+            if not testo_tradotto_md: continue
+
+            ids_originali = blocco_logico.get("ids_originali", [])
+            if not ids_originali:
+                ids_originali = [blocco_logico.get("id_blocco")]
+                
+            idx_str = str(i)
+            parole_salve = parole_da_preservare.get(idx_str, [])
+            parole_salve_lower = [ps.lower() for ps in parole_salve]
+
+            tutti_x = []
+            tutti_y = []
+            colore_testo = (0,0,0)
+            trovato_colore = False
+
+            ruolo_calc = mappa_ruoli.get(i, "Sconosciuto")
+            allin = mappa_allineamenti.get(i, "sinistra")
+
+            for id_orig in ids_originali:
+                blocco_ocr = next((b for b in dati_strutturati if b["id_blocco"] == id_orig), None)
+                if blocco_ocr:
+                    for p in blocco_ocr["parole"]:
+                        if p["testo"].lower() in parole_salve_lower:
+                            continue
+                            
+                        if not trovato_colore:
+                            rgb = p.get("colore_rgb", {"r":0, "g":0, "b":0})
+                            colore_testo = (rgb["r"], rgb["g"], rgb["b"])
+                            trovato_colore = True
+                            
+                        for v in p["vertici"]:
+                            tutti_x.append(v["x"])
+                            tutti_y.append(v["y"])
+                            
+            if not tutti_x: continue
+
+            min_x, max_x = min(tutti_x), max(tutti_x)
+            min_y, max_y = min(tutti_y), max(tutti_y)
+            box_width, box_height = max_x - min_x, max_y - min_y
+            
+            colore_sfondo = calcola_sfondo(img, min_x, min_y, max_x, max_y)
+            
+            # --- FASE 1: CANCELLAZIONE DINAMICA E ANTI-OMBRA ---
+            for id_orig in ids_originali:
+                blocco_ocr = next((b for b in dati_strutturati if b["id_blocco"] == id_orig), None)
+                if blocco_ocr:
+                    for p in blocco_ocr["parole"]:
+                        if p["testo"].lower() in parole_salve_lower:
+                            continue
+                            
+                        pxs = [v["x"] for v in p["vertici"]]
+                        pys = [v["y"] for v in p["vertici"]]
                         
-                    if target_i == -1: continue
+                        if pxs and pys:
+                            word_h = max(pys) - min(pys)
+                            
+                            p_left = 6
+                            p_top = 4
+                            p_right = 12
+                            p_bottom = 4
+                            
+                            if ruolo_calc == "Titolo":
+                                p_right = max(15, int(word_h * 0.30))  
+                                p_bottom = max(10, int(word_h * 0.25)) 
+                                p_top = 8
+                                p_left = 8
 
-                    if n_testo:
-                        trovato_trad = False
-                        for t in trad_attive_lang:
-                            if t.get("id_blocco") == target_i:
-                                t["testi_tradotti"][lang] = n_testo
-                                trovato_trad = True
-                                break
-                        if not trovato_trad:
-                            trad_attive_lang.append({"id_blocco": target_i, "testi_tradotti": {lang: n_testo}})
-                                
-                    off_x, off_y = corr.get("offset_x_pct", 0.0), corr.get("offset_y_pct", 0.0)
-                    if off_x != 0.0 or off_y != 0.0:
-                        offset_attivi_lang[str(target_i)] = {"offset_x_pct": off_x, "offset_y_pct": off_y}
+                            draw.rectangle([min(pxs)-p_left, min(pys)-p_top, max(pxs)+p_right, max(pys)+p_bottom], fill=colore_sfondo)
 
-                    p_preservare = corr.get("parole_da_preservare", [])
-                    if p_preservare:
-                        parole_protette_lang[str(target_i)] = p_preservare
-
-                genera_infografiche(
-                    image_path=percorso_immagine, 
-                    dati_strutturati=dati_strutturati, 
-                    blocchi_logici=blocchi_validi_lang, 
-                    traduzioni=[{"id_blocco": t.get("id_blocco"), "testi_tradotti": {lang: t.get("testi_tradotti", {}).get(lang, "")}} for t in trad_attive_lang],
-                    mappa_allineamenti=allin_lang,
-                    mappa_ruoli=ruoli_lang,
-                    offset_correttivi=offset_attivi_lang,
-                    parole_da_preservare=parole_protette_lang,
-                    nome_base=nome_base
-                )
-
-        logger.log("\n=== AVVIO CARICAMENTO SU BUCKET ===")
-        current_date_str = datetime.now().strftime("%Y-%m-%d")
-        percorso_base_output = f"elaborato_{current_date_str}"
-        content_type = f'image/{formato_img.lower()}'
-
-        # SALVATAGGIO SOLO DELLE IMMAGINI TRADOTTE
-        for lang in lingue_richieste:
-            img_tradotta_path = f"/tmp/infografica_{lang}.jpg"
-            if os.path.exists(img_tradotta_path):
-                clean_blob_name = f"{percorso_base_output}/{nome_base}_{lang}{estensione}"
-                clean_blob = destination_bucket.blob(clean_blob_name)
-                clean_blob.upload_from_filename(img_tradotta_path, content_type=content_type)
-                logger.log(f"✅ Upload completato: {clean_blob_name}")
-
-        logger.log("\n🚀 PIPELINE MULTI-AGENTE COMPLETATA CON SUCCESSO!")
-
-    except Exception as e:
-        logger.log(f"\n❌ ERRORE CRITICO: {e}")
-        raise e
-    finally:
-        # Ripristina l'output standard
-        sys.stdout = original_stdout
+            # --- FASE 2: OFFSET DELL'IA SULLE NUOVE COORDINATE ---
+            if idx_str in offset_correttivi:
+                off_x_pct = offset_correttivi[idx_str].get("offset_x_pct", 0.0)
+                off_y_pct = offset_correttivi[idx_str].get("offset_y_pct", 0.0)
+                
+                pixel_spostamento_x = int(img.width * off_x_pct)
+                pixel_spostamento_y = int(img.height * off_y_pct)
+                
+                min_x += pixel_spostamento_x
+                min_y += pixel_spostamento_y
+                
+                if pixel_spostamento_x > 0:
+                    box_width -= pixel_spostamento_x 
+            
+            disegna_testo_markdown(
+                draw=draw, 
+                testo_md=testo_tradotto_md, 
+                path_reg=FONT_REG, 
+                path_bold=FONT_BOLD, 
+                box_x=min_x, 
+                box_y=min_y, 
+                box_width=box_width, 
+                box_height=box_height, 
+                color=colore_testo,
+                img_width=img.width,     # <-- Parametro Limite Destro 
+                img_height=img.height,   # <-- Passato per sicurezza
+                allineamento=allin,
+                ruolo=ruolo_calc
+            )
+            
+        nome_file = f"{nome_base}_{lang}.jpg"
+        img.save(nome_file, quality=95)
+        print(f"✅ Salvata: {nome_file}")
