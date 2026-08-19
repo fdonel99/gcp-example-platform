@@ -39,9 +39,10 @@ def analizza_e_filtra(image_path, json_estratti, istruzioni_correttive=None):
         
         "COMPITO 1: Inserisci in 'ids_da_ignorare' i testi di loghi, bollini o badge.",
         "COMPITO 2: Inserisci in 'ids_originali' i testi descrittivi da tradurre.",
-        "COMPITO 3: Restituisci il testo fuso in MARKDOWN. ATTENZIONE: Nel JSON di input noterai che alcune parole hanno i doppi asterischi (**). DEVI assolutamente mantenerli nella tua stringa 'testo_markdown' per segnalare le parole in grassetto. Usa anche '\\n' per rispettare gli a capo visivi.",
+        "COMPITO 3: Restituisci il testo fuso in MARKDOWN usando i doppi asterischi (**) per il grassetto e '\\n' per gli a capo. ATTENZIONE (CRITICO): Nel JSON di input potresti trovare dei doppi asterischi (**) messi a caso o del tutto assenti. NON fidarti del JSON! Guarda l'immagine: applica i doppi asterischi SOLO E SOLTANTO alle parole che tu vedi visivamente scritte con un font più spesso/grassetto. Se il JSON ha messo asterischi su parole che nell'immagine sono sottili, rimuovili. Se il JSON li ha dimenticati su titoli spessi, aggiungili tu. Sii una spietata guardia di controllo visivo!",
         "COMPITO 4: Assegna un RUOLO ('Titolo' o 'Callout').",
         "COMPITO 5: Determina l'ALLINEAMENTO ('sinistra', 'centro', 'destra')."
+        "COMPITO 6: Osserva attentamente l'immagine originale. Se un blocco di testo (o parte di esso) ha un font visibilmente più spesso (Grassetto), DEVI racchiuderlo tra doppi asterischi (es. **testo in grassetto**). Sii chirurgico: se solo mezza riga è in grassetto, applica gli asterischi SOLO a quella specifica metà! Se il testo è sottile, NON usare gli asterischi."
     ]
     
     # --- INIEZIONE DELL'ORDINE DEL DIRETTORE ---

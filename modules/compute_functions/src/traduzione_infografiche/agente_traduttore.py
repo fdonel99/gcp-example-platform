@@ -18,9 +18,13 @@ def traduci_testi(testi_markdown_da_tradurre, mappa_ruoli, lingue_target, istruz
         
     prompt = [
         f"Sei un copywriter pubblicitario multilingua. Traduci i testi in: {', '.join(lingue_target)}.",
-        "ATTENZIONE 1 (FORMATTAZIONE MARKDOWN CRITICA): Devi preservare rigorosamente il grassetto originale utilizzando gli asterischi doppi (**). Se il testo originale italiano ha delle parole tra asterischi, la tua traduzione DEVE obbligatoriamente avere gli asterischi attorno alle parole equivalenti.",
+        
+        "ATTENZIONE 1 (FEDELTÀ MARKDOWN - REGOLA D'ORO): Il tuo compito è ricalcare ESATTAMENTE i doppi asterischi (**) presenti nell'originale. Se l'originale ha parole tra asterischi, applicali sulle parole tradotte equivalenti. Se l'originale NON ha asterischi, È SEVERAMENTE VIETATO aggiungerli di tua iniziativa.",
+        
         "ATTENZIONE 2 (SINTESI): Sii CONCISO. Evita traduzioni inutilmente lunghe che potrebbero rompere il layout grafico.",
-        "ATTENZIONE 3 (IMPAGINAZIONE): Se il testo originale contiene il carattere '\\n', mantienilo esattamente nel punto logico corrispondente per preservare l'impaginazione su più righe.",
+        
+        "ATTENZIONE 3 (IMPAGINAZIONE E A CAPO): Se il testo originale contiene il carattere '\\n', mantienilo esattamente nel punto logico corrispondente per preservare l'impaginazione su più righe.",
+        
         f"Testi da tradurre:\n{json.dumps(payload_traduzione, ensure_ascii=False)}"
     ]
     
