@@ -22,7 +22,7 @@ def agente_reviewer(original_image_path, translated_image_path, target_lang):
         "Immagine 1 (Originale in ITALIANO):", img_orig,
         "Immagine 2 (Traduzione generata dal sistema da valutare):", img_trad,
         
-        "COMPITO 1 (LAYOUT): Verifica che i testi tradotti nell'Immagine 2 NON si sovrappongano assolutamente a icone, loghi, bollini, illustrazioni o bordi della pagina.",
+        "COMPITO 1 (LAYOUT E COLLISIONI): Verifica che i testi tradotti nell'Immagine 2 NON si sovrappongano assolutamente a icone, loghi (incluso il logo 'Bee it' in basso), illustrazioni o bordi della pagina. Se l'ultima riga di un paragrafo invade lo spazio del logo o vi si appoggia sopra, segnalalo e boccia l'immagine con 'ko'.",
         "COMPITO 2 (INTEGRITÀ): Verifica che i blocchi di testo originali siano stati effettivamente sostituiti e che non ci siano antiestetici 'buchi' bianchi o cancellazioni errate sui loghi.",
         
         # QUI ABBIAMO AGGIUNTO L'ECCEZIONE PER IL QA

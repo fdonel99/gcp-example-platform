@@ -21,9 +21,9 @@ def traduci_testi(testi_markdown_da_tradurre, mappa_ruoli, lingue_target, istruz
         
         "ATTENZIONE 1 (FEDELTÀ MARKDOWN - REGOLA D'ORO): Il tuo compito è ricalcare ESATTAMENTE i doppi asterischi (**) presenti nell'originale. Se l'originale ha parole tra asterischi, applicali sulle parole tradotte equivalenti. Se l'originale NON ha asterischi, È SEVERAMENTE VIETATO aggiungerli di tua iniziativa.",
         
-        "ATTENZIONE 2 (SINTESI): Sii CONCISO. Evita traduzioni inutilmente lunghe che potrebbero rompere il layout grafico.",
+        "ATTENZIONE 2 (SINTESI E SPAZI): Sii CONCISO. Le traduzioni inutilmente lunghe rompono l'equilibrio della grafica.",
         
-        "ATTENZIONE 3 (IMPAGINAZIONE E A CAPO): Se il testo originale contiene il carattere '\\n', mantienilo esattamente nel punto logico corrispondente per preservare l'impaginazione su più righe.",
+        "ATTENZIONE 3 (STRUTTURA RIGHE E A CAPO - CRITICO): Per evitare collisioni con loghi o elementi grafici vicini, la tua traduzione DEVE mantenere lo stesso numero di righe e la stessa impaginazione dell'originale. Se il testo originale contiene il carattere '\\n', inseriscilo obbligatoriamente nella traduzione nel punto logico corrispondente, spezzando la frase nello stesso modo.",
         
         f"Testi da tradurre:\n{json.dumps(payload_traduzione, ensure_ascii=False)}"
     ]
